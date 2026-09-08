@@ -98,6 +98,15 @@ for (const w of free) {
   }
 }
 
+// Meetups are weekday-only: weekend windows must never appear by default.
+assert.ok(
+  free.every((w) => w.day !== "Sa" && w.day !== "Su"),
+  "no weekend windows in the default result"
+);
+// ...but an explicit days list is still honoured.
+const weekend = commonFree({ membersBusy, dayStart, dayEnd, minMinutes: 60, days: ["Sa"] });
+assert.ok(weekend.every((w) => w.day === "Sa"), "explicit days override still works");
+
 // A member who is busy all week must drive the result to nothing.
 const allBusy = [{ day: "Mo" as const, start: 0, end: 1440, campus: "Burnaby", label: "blocked" }];
 const blocked = commonFree({

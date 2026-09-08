@@ -6,6 +6,13 @@ const API = "https://api.sfucourses.com/v1/rest";
 export const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const;
 export type DayKey = (typeof DAYS)[number];
 
+/**
+ * Meetups are on campus between classes, so the week is Mon–Fri. Weekend
+ * sections still parse and still count as busy time; they just aren't days we
+ * look for a meetup on.
+ */
+export const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr"] as const satisfies readonly DayKey[];
+
 export interface SectionSchedule {
   startDate: string; // 2025-09-03
   endDate: string; // 2025-12-02

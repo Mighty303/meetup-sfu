@@ -5,6 +5,7 @@
 
 import {
   DAYS,
+  WEEKDAYS,
   type DayKey,
   type CourseWithSections,
   type SectionDetail,
@@ -160,6 +161,7 @@ export interface CommonFreeOptions {
   dayEnd: number;
   /** Windows shorter than this aren't worth walking to campus for. */
   minMinutes: number;
+  /** Defaults to Mon–Fri. */
   days?: readonly DayKey[];
 }
 
@@ -168,7 +170,7 @@ export function commonFree({
   dayStart,
   dayEnd,
   minMinutes,
-  days = DAYS,
+  days = WEEKDAYS,
 }: CommonFreeOptions): FreeWindow[] {
   if (membersBusy.length === 0) return [];
   const windows: FreeWindow[] = [];

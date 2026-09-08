@@ -1,9 +1,7 @@
 "use client";
 
 import type { BusyBlock, FreeWindow } from "@/lib/overlap";
-import { formatTime, type DayKey } from "@/lib/sfu";
-
-const WEEKDAYS: DayKey[] = ["Mo", "Tu", "We", "Th", "Fr"];
+import { formatTime, WEEKDAYS, type DayKey } from "@/lib/sfu";
 const LABELS: Record<DayKey, string> = {
   Mo: "Mon", Tu: "Tue", We: "Wed", Th: "Thu", Fr: "Fri", Sa: "Sat", Su: "Sun",
 };
