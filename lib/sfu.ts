@@ -129,3 +129,17 @@ export function currentTermCode(date = new Date()): string {
   const season = month <= 3 ? "spring" : month <= 7 ? "summer" : "fall";
   return `${date.getFullYear()}-${season}`;
 }
+
+/**
+ * Link to the sfucourses.com schedule builder, pre-set to a term.
+ *
+ * That page encodes the term as fa/sp/su + a 2-digit year, and only honours it
+ * for the current and next term — anything older falls back to its default,
+ * which is harmless since the link is just a starting point.
+ */
+export function scheduleBuilderUrl(termCode: string): string {
+  const [year, season] = termCode.split("-");
+  const short: Record<string, string> = { spring: "sp", summer: "su", fall: "fa" };
+  const param = short[season] ? `${short[season]}${year.slice(-2)}` : "";
+  return `https://sfucourses.com/schedule${param ? `?term=${param}` : ""}`;
+}

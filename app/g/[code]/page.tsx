@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import { WeekGrid } from "@/components/WeekGrid";
 import type { BusyBlock, FreeWindow } from "@/lib/overlap";
-import { formatTime, fromTermCode } from "@/lib/sfu";
+import { formatTime, fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
 
 interface Member {
   id: number;
@@ -47,6 +47,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
   const [saving, setSaving] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   const load = useCallback(async () => {
     const res = await fetch(
@@ -63,11 +64,19 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     setWeek((cur) => cur ?? next.week);
   }, [code, week, minMinutes]);
 
+  // Fetch on mount and whenever the week/duration filters change. The state
+  // updates happen after an await, not synchronously, so the cascading-render
+  // concern behind this rule doesn't apply.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   // Which member this browser is, so pasting a link updates the right person.
+  // This can't be a useState initializer: the page server-renders, where
+  // localStorage doesn't exist, and reading it during render would break
+  // hydration. An effect after mount is the correct place for it.
   useEffect(() => {
     const saved = localStorage.getItem(`meetup-sfu:${code}`);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved) setMeId(Number(saved));
   }, [code]);
 
@@ -109,17 +118,17 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   }
 
   if (error && !state) {
-    return <main className="mx-auto max-w-lg p-6"><p className="text-red-600">{error}</p></main>;
+    return <main className="mx-auto w-full max-w-lg p-6"><p className="text-red-600">{error}</p></main>;
   }
   if (!state) {
-    return <main className="mx-auto max-w-lg p-6 text-neutral-500">Loading…</main>;
+    return <main className="mx-auto w-full max-w-lg p-6 text-neutral-500">Loading…</main>;
   }
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const sharedWindows = state.free.filter((w) => w.sharedCampus);
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{state.group.name}</h1>
@@ -127,12 +136,28 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
             {fromTermCode(state.group.term)} · code <span className="font-mono">{state.group.code}</span>
           </p>
         </div>
-        <button
-          onClick={() => navigator.clipboard.writeText(shareUrl)}
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
-        >
-          Copy invite link
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Always visible: clipboard access is unreliable (it silently never
+              settles when the document isn't focused), and people want to see
+              the link they're sharing anyway. */}
+          <input
+            readOnly
+            value={shareUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-44 rounded-lg border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-600 sm:w-72 lg:w-96 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+          />
+          <button
+            onClick={() => {
+              // Optimistic — the promise may never settle, so don't wait on it.
+              setCopyState("copied");
+              setTimeout(() => setCopyState("idle"), 2000);
+              navigator.clipboard?.writeText(shareUrl).catch(() => setCopyState("failed"));
+            }}
+            className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            {copyState === "copied" ? "Copied ✓" : copyState === "failed" ? "Select & copy ↑" : "Copy link"}
+          </button>
+        </div>
       </header>
 
       {!me ? (
@@ -147,16 +172,44 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
           <button disabled={saving} className="rounded-lg bg-neutral-900 px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
             Join
           </button>
+          <p className="w-full text-xs text-neutral-500">
+            Then paste your schedule from{" "}
+            <a
+              href={scheduleBuilderUrl(state.group.term)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
+              sfucourses.com/schedule
+            </a>
+            .
+          </p>
         </form>
       ) : (
         <form onSubmit={saveSchedule} className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-          <label className="text-sm">
-            <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
-            {" — paste your sfucourses.com schedule link"}
-            {me.classNumbers.length > 0 && (
-              <span className="text-neutral-500"> ({me.classNumbers.length} sections saved)</span>
-            )}
-          </label>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <label className="text-sm">
+              <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
+              {me.classNumbers.length > 0
+                ? ` — ${me.classNumbers.length} section${me.classNumbers.length === 1 ? "" : "s"} saved. Paste a new link to replace them.`
+                : " — paste your schedule link below"}
+            </label>
+            <a
+              href={scheduleBuilderUrl(state.group.term)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
+              Build it on sfucourses.com ↗
+            </a>
+          </div>
+          {me.classNumbers.length === 0 && (
+            <ol className="ml-4 list-decimal text-xs text-neutral-500">
+              <li>Open the builder, pick your {fromTermCode(state.group.term)} sections</li>
+              <li>Copy the URL from your browser&apos;s address bar</li>
+              <li>Paste it here</li>
+            </ol>
+          )}
           <div className="flex flex-wrap gap-2">
             <input
               value={link}
@@ -191,7 +244,11 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
             <span key={m.id} className="flex items-center gap-1.5">
               <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: m.color }} />
               {m.displayName}
-              {m.classNumbers.length === 0 && <span className="text-neutral-400">(no schedule yet)</span>}
+              {m.classNumbers.length === 0 && (
+                <span className="text-neutral-400" title="Not counted in the overlap until they add a schedule">
+                  (no schedule yet)
+                </span>
+              )}
               {state.unresolved[m.id]?.length > 0 && (
                 <span className="text-amber-600" title={`Not in ${fromTermCode(state.group.term)}: ${state.unresolved[m.id].join(", ")}`}>
                   ⚠ {state.unresolved[m.id].length}
@@ -225,7 +282,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
             No shared window this week at {minMinutes} min. Try a shorter minimum.
           </p>
         ) : (
-          <ul className="grid gap-1.5 sm:grid-cols-2">
+          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {state.free.map((w, i) => (
               <li key={i} className="flex items-baseline gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800">
                 <span className="w-20 shrink-0 font-medium">{DAY_LABELS[w.day] ?? w.day}</span>

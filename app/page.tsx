@@ -41,7 +41,7 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 p-6">
+    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-8 p-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">meetup-sfu</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400">

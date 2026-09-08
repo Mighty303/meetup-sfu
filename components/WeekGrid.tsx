@@ -14,6 +14,10 @@ export interface Member {
   color: string;
 }
 
+// Grows with the viewport so a 14-hour day isn't crushed on a large screen,
+// while staying short enough to see the whole week without scrolling on a phone.
+const COLUMN_HEIGHT = "h-[460px] sm:h-[600px] lg:h-[720px] xl:h-[820px]";
+
 interface Props {
   members: Member[];
   busyByMember: Record<number, BusyBlock[]>;
@@ -30,9 +34,15 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
   for (let m = Math.ceil(dayStart / 60) * 60; m <= dayEnd; m += 60) hours.push(m);
 
   return (
-    <div className="flex gap-2 text-xs">
-      {/* hour gutter */}
-      <div className="relative w-12 shrink-0" style={{ height: 640 }}>
+    // Five columns can't compress below ~600px and stay readable, so on narrow
+    // screens the week scrolls sideways instead of turning into slivers.
+    <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <div className="flex min-w-[620px] gap-2 text-xs">
+      {/* Hour gutter. The empty header mirrors the day-name row so the hour
+          labels line up with the grid lines instead of sitting a row high. */}
+      <div className="w-12 shrink-0">
+      <div className="mb-1 text-center font-medium" aria-hidden>&nbsp;</div>
+      <div className={`relative ${COLUMN_HEIGHT}`}>
         {hours.map((h) => (
           <div
             key={h}
@@ -42,6 +52,7 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
             {formatTime(h).replace(":00", "")}
           </div>
         ))}
+      </div>
       </div>
 
       <div className="grid flex-1 grid-cols-5 gap-2">
@@ -53,8 +64,7 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
                 {LABELS[day]}
               </div>
               <div
-                className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900"
-                style={{ height: 640 }}
+                className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 ${COLUMN_HEIGHT}`}
               >
                 {hours.map((h) => (
                   <div
@@ -109,6 +119,7 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );
