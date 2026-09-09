@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CourseHit, SectionHit } from "@/lib/sfu";
+import { scheduleBuilderUrl, type CourseHit, type SectionHit } from "@/lib/sfu";
 
 interface Props {
   /** Group term, e.g. "2026-fall" — searches are scoped to it. */
@@ -34,6 +34,9 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
   const [saved, setSaved] = useState<CourseHit[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  const [link, setLink] = useState("");
+  const [pasting, setPasting] = useState(false);
 
   const savedSet = new Set(classNumbers);
   // Results belong to whatever is in the box now; a stale list from the
@@ -99,11 +102,71 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
     onChange();
   }
 
+  /**
+   * The other way in: a link from the sfucourses builder. It replaces
+   * everything saved — that's what the link represents, a whole schedule.
+   */
+  async function savePastedLink(e: React.FormEvent) {
+    e.preventDefault();
+    if (!link.trim()) return;
+    setPasting(true);
+    const res = await fetch(`/api/groups/${groupCode}/members/${memberId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: link }),
+    });
+    setPasting(false);
+    if (!res.ok) {
+      setError((await res.json().catch(() => ({}))).error ?? "could not save that link");
+      return;
+    }
+    const { classNumbers }: { classNumbers: string[] } = await res.json();
+    if (classNumbers.length === 0) {
+      setError("No class numbers in that link — copy the whole URL from the builder.");
+      return;
+    }
+    setError(null);
+    setLink("");
+    onChange();
+  }
+
+  /**
+   * The button next to the box. Typing already searches, so this only has
+   * something to do when the query names exactly one section — "cmpt 307",
+   * whose D100 is the only thing it can mean. Anything broader has to be
+   * picked from the list, since we can't guess which section they're in.
+   */
+  async function addFromQuery(e: React.FormEvent) {
+    e.preventDefault();
+    if (hits.q !== q) return; // results still in flight
+    const sections = hits.courses.flatMap((c) => c.sections);
+    const unsaved = sections.filter((sec) => !savedSet.has(sec.classNumber));
+    if (unsaved.length === 1) {
+      setHint(null);
+      await add(unsaved[0].classNumber);
+      setQuery("");
+      return;
+    }
+    setHint(
+      sections.length === 0
+        ? "Nothing matches that this term."
+        : unsaved.length === 0
+          ? "Everything matching that is already saved."
+          : "More than one section matches — pick the one you're in below."
+    );
+  }
+
   const searching = hits.q !== q;
   const shownResults = searching ? [] : hits.courses;
 
   return (
     <div className="flex flex-col gap-2">
+      <p className="text-xs font-medium text-neutral-500">Your courses</p>
+      {key === "" ? (
+        <p className="text-xs text-neutral-500">Nothing saved yet — add your sections below.</p>
+      ) : saved.length === 0 ? (
+        <p className="text-xs text-neutral-500">Loading your sections…</p>
+      ) : null}
       {key !== "" && saved.length > 0 && (
         <ul className="flex flex-wrap gap-1.5">
           {saved.map((c) =>
@@ -126,12 +189,22 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
         </ul>
       )}
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Add a course — CMPT 225, MATH 151, calculus…"
-        className="rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-      />
+      <p className="mt-1 text-xs font-medium text-neutral-500">Search SFU courses</p>
+      <form onSubmit={addFromQuery} className="flex flex-wrap gap-2">
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setHint(null); }}
+          placeholder="CMPT 225, MATH 151, calculus…"
+          className="min-w-48 flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+        />
+        <button
+          disabled={!searchable || searching || busy !== null}
+          className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+        >
+          Add
+        </button>
+      </form>
+      {hint && <p className="text-xs text-neutral-500">{hint}</p>}
 
       {searchable && (
         <div className="max-h-72 overflow-y-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
@@ -184,6 +257,43 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
       <p className="text-xs text-neutral-500">
         Tutorials and labs are listed as their own sections — add each one you&apos;re in.
       </p>
+
+      {/* Second way in, kept visible rather than tucked away: anyone who has
+          already built their term on sfucourses has the whole thing in a URL,
+          and re-picking it section by section would be a step backwards. */}
+      <div className="mt-1 flex flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <p className="text-xs font-medium text-neutral-500">
+            Or paste your sfucourses.com link
+          </p>
+          <a
+            href={scheduleBuilderUrl(term)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          >
+            Build it on sfucourses.com ↗
+          </a>
+        </div>
+        <form onSubmit={savePastedLink} className="flex flex-wrap gap-2">
+          <input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="https://sfucourses.com/schedule?courses=5446-5447"
+            className="min-w-48 flex-1 rounded-lg border border-neutral-300 px-3 py-2 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
+          />
+          <button
+            disabled={pasting || !link.trim()}
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+          >
+            {pasting ? "Saving…" : classNumbers.length > 0 ? "Replace all" : "Save"}
+          </button>
+        </form>
+        <p className="text-xs text-neutral-500">
+          A link replaces everything above — it stands for your whole schedule.
+        </p>
+      </div>
+
       {error && <p className="text-xs text-amber-600">{error}</p>}
     </div>
   );

@@ -8,7 +8,7 @@ import { Avatar } from "@/components/Avatar";
 import { ColorPicker } from "@/components/ColorPicker";
 import { fileToAvatar } from "@/lib/avatar-file";
 import { CoursePicker } from "@/components/CoursePicker";
-import { fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
+import { fromTermCode } from "@/lib/sfu";
 
 interface Membership {
   memberId: number;
@@ -61,7 +61,6 @@ export default function ProfilePage() {
   // Keyed by member id: one card's error shouldn't blank out another's.
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [names, setNames] = useState<Record<number, string>>({});
-  const [links, setLinks] = useState<Record<number, string>>({});
   const [confirmLeave, setConfirmLeave] = useState<number | null>(null);
   const [everywhereName, setEverywhereName] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -202,35 +201,6 @@ export default function ProfilePage() {
         : `Renamed everywhere except: ${failed.join(", ")}.`
     );
     setEverywhereName("");
-    load();
-  }
-
-  async function saveSchedule(m: Membership, e: React.FormEvent) {
-    e.preventDefault();
-    const input = links[m.memberId] ?? "";
-    if (!input.trim()) return;
-    setSaving(true);
-    const res = await fetch(`/api/groups/${m.group.code}/members/${m.memberId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      setError(m.memberId, (await res.json().catch(() => ({}))).error ?? "could not save that");
-      return;
-    }
-    const { classNumbers }: { classNumbers: string[] } = await res.json();
-    setError(
-      m.memberId,
-      classNumbers.length === 0
-        ? "No class numbers found in that — paste the whole sfucourses.com/schedule link."
-        : null
-    );
-    if (classNumbers.length > 0) {
-      setLinks((cur) => ({ ...cur, [m.memberId]: "" }));
-      setNotice(`Saved ${classNumbers.length} section${classNumbers.length === 1 ? "" : "s"} in ${m.group.name}.`);
-    }
     load();
   }
 
@@ -436,33 +406,7 @@ export default function ProfilePage() {
                     onChange={load}
                   />
 
-                  <form onSubmit={(e) => saveSchedule(m, e)} className="flex flex-wrap items-end gap-2">
-                    <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-500">
-                      Or paste a schedule link (replaces everything above)
-                      <input
-                        value={links[m.memberId] ?? ""}
-                        onChange={(e) => setLinks((cur) => ({ ...cur, [m.memberId]: e.target.value }))}
-                        placeholder="https://sfucourses.com/schedule?courses=5446-5447"
-                        className="rounded-lg border border-neutral-300 px-3 py-2 font-mono text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                      />
-                    </label>
-                    <button
-                      disabled={saving || !(links[m.memberId] ?? "").trim()}
-                      className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
-                    >
-                      {m.classNumbers.length > 0 ? "Replace" : "Save"}
-                    </button>
-                  </form>
-
                   <div className="flex flex-wrap items-center gap-3 text-xs">
-                    <a
-                      href={scheduleBuilderUrl(m.group.term)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-                    >
-                      Build it on sfucourses.com ↗
-                    </a>
                     {errors[m.memberId] && <p className="text-amber-600">{errors[m.memberId]}</p>}
                     {confirmLeave === m.memberId ? (
                       <span className="ml-auto flex items-center gap-2">

@@ -92,7 +92,6 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   // and your own gaps, without everyone else's blocks to read past.
   const [view, setView] = useState<"everyone" | "mine">("everyone");
   const [showAllPartial, setShowAllPartial] = useState(false);
-  const [link, setLink] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -141,27 +140,6 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     setSaving(false);
     if (!res.ok) { setError((await res.json()).error); return; }
     setError(null);
-    load();
-  }
-
-  async function saveSchedule(e: React.FormEvent) {
-    e.preventDefault();
-    if (!me) return;
-    setSaving(true);
-    const res = await fetch(`/api/groups/${code}/members/${me.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input: link }),
-    });
-    setSaving(false);
-    if (!res.ok) { setError((await res.json()).error); return; }
-    const { classNumbers } = await res.json();
-    setError(
-      classNumbers.length === 0
-        ? "No class numbers found in that — paste the whole sfucourses.com/schedule link."
-        : null
-    );
-    setLink("");
     load();
   }
 
@@ -428,14 +406,6 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
                 </span>
               </div>
             )}
-            <a
-              href={scheduleBuilderUrl(state.group.term)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-            >
-              Build it on sfucourses.com ↗
-            </a>
           </div>
 
           {/* Right next to the grid it applies to — the whole point of changing
@@ -464,24 +434,6 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
             classNumbers={me.classNumbers}
             onChange={load}
           />
-
-          <details className="text-xs text-neutral-500">
-            <summary className="cursor-pointer select-none underline-offset-2 hover:underline">
-              Built it on sfucourses.com already? Paste the link
-            </summary>
-            <form onSubmit={saveSchedule} className="mt-2 flex flex-wrap gap-2">
-            <input
-              value={link}
-              onChange={(e) => setLink(e.target.value)}
-              placeholder="https://sfucourses.com/schedule?courses=5446-5447"
-              className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
-            />
-            <button disabled={saving} className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
-              {saving ? "Saving…" : me.classNumbers.length > 0 ? "Replace all" : "Save"}
-            </button>
-            </form>
-            <p className="mt-1">Pasting a link replaces everything you have saved here.</p>
-          </details>
 
           <div className="flex items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
