@@ -2,8 +2,8 @@
 
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { AuthButton } from "./AuthButton";
 
 interface Membership {
@@ -12,16 +12,22 @@ interface Membership {
 }
 
 export function NavBar() {
-  const { status } = useSession();
+  return <Suspense fallback={<div className="h-16 border-b border-neutral-200 dark:border-neutral-800" />}><NavBarContent /></Suspense>;
+}
+
+function NavBarContent() {
+  const { data: session, status } = useSession();
   const pathname = usePathname();
-  const [recent, setRecent] = useState<Membership | null>(null);
+  const searchParams = useSearchParams();
+  const [recent, setRecent] = useState<(Membership & { userId: number }) | null>(null);
+  const userId = session?.appUserId;
 
   // "Schedule" has no fixed route — a schedule always belongs to a group. It
   // points at the group you're looking at, or failing that your most recent one.
   const currentCode = pathname.startsWith("/g/") ? pathname.split("/")[2] : null;
 
   useEffect(() => {
-    if (status !== "authenticated" || currentCode) return;
+    if (status !== "authenticated" || !userId || currentCode) return;
     let cancelled = false;
     fetch("/api/me")
       .then((r) => (r.ok ? r.json() : null))
@@ -30,14 +36,15 @@ export function NavBar() {
         // /api/me nests the group under `group` — the flat fields are the
         // member row, whose `name` is your display name, not the group's.
         const m = data.memberships[0];
-        setRecent({ code: m.group.code, name: m.group.name });
+        setRecent({ code: m.group.code, name: m.group.name, userId });
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [status, currentCode]);
+  }, [status, userId, currentCode]);
 
-  const scheduleCode = currentCode ?? recent?.code ?? null;
+  const scheduleCode = currentCode ?? (status === "authenticated" && recent?.userId === userId ? recent?.code : null);
   const signedIn = status === "authenticated";
+  const mySchedule = pathname === "/my-schedule" || (!!currentCode && searchParams.get("view") === "mine");
 
   return (
     <nav className="border-b border-neutral-200 dark:border-neutral-800">
@@ -51,8 +58,16 @@ export function NavBar() {
 
         <NavLink href="/" active={pathname === "/"}>Home</NavLink>
         {scheduleCode && (
-          <NavLink href={`/g/${scheduleCode}`} active={pathname.startsWith("/g/")}>
+          <NavLink href={`/g/${scheduleCode}`} active={!!currentCode && !mySchedule}>
             Schedule
+          </NavLink>
+        )}
+        {signedIn && (
+          <NavLink
+            href={currentCode ? `/g/${currentCode}?view=mine` : "/my-schedule"}
+            active={mySchedule}
+          >
+            My Schedule
           </NavLink>
         )}
         {signedIn && (

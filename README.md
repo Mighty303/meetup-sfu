@@ -88,5 +88,11 @@ A group is still a secret invite code — anyone with the link can view it. What
 sign-in adds is ownership: your schedule and name are yours to edit, and your
 identity follows you across devices instead of living in `localStorage`.
 
+After signing in, **My Schedule** in the navigation opens just your saved classes
+and free time in the current group. The `?view=mine` link keeps this view selected
+when refreshed or bookmarked; **Schedule** switches back to the group. From home,
+My Schedule opens your newest group. If you haven't joined one yet, it shows how
+to get started.
+
 Not built yet: custom busy blocks (the `meetup.member_blocks` table exists and is
 read, but there's no UI to add them), calendar export, meeting-spot suggestions.

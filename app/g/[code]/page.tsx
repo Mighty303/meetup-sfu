@@ -1,8 +1,10 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import Image from "next/image";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { ColorPicker } from "@/components/ColorPicker";
 import { CoursePicker } from "@/components/CoursePicker";
@@ -79,7 +81,16 @@ const DAY_END = 22 * 60;
 
 export default function GroupPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  return (
+    <Suspense fallback={<main className="mx-auto w-full max-w-lg p-6 text-neutral-500">Loading…</main>}>
+      <GroupSchedule key={code} code={code} />
+    </Suspense>
+  );
+}
+
+function GroupSchedule({ code }: { code: string }) {
   const { data: session, status: authStatus } = useSession();
+  const searchParams = useSearchParams();
 
   const [state, setState] = useState<GroupState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +101,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   // "mine" narrows the whole page to your own row: your classes at full width
   // and your own gaps, without everyone else's blocks to read past.
-  const [view, setView] = useState<"everyone" | "mine">("everyone");
+  const view = searchParams.get("view") === "mine" ? "mine" : "everyone";
   const [showAllPartial, setShowAllPartial] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
@@ -120,8 +131,8 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
 
   // Identity comes from the session — no localStorage, so your schedule follows
   // you to any device you sign in on.
-  const me = state?.members.find((m) => m.userId === session?.appUserId) ?? null;
   const signedIn = authStatus === "authenticated";
+  const me = signedIn ? state?.members.find((m) => m.userId === session?.appUserId) ?? null : null;
   // Rows with no owner: claimable by whoever signs in and says that's them.
   const unclaimed = state?.members.filter((m) => m.userId === null) ?? [];
 
@@ -193,9 +204,9 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   const shown = useMemo(
     () =>
       view === "mine"
-        ? scheduled.filter((m) => m.userId === session?.appUserId)
+        ? scheduled.filter((m) => m.id === me?.id)
         : scheduled.filter((m) => !hidden.has(m.id)),
-    [scheduled, hidden, view, session?.appUserId]
+    [scheduled, hidden, view, me?.id]
   );
 
   const schedules = useMemo(
@@ -236,6 +247,25 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
       );
   }, [schedules, view]);
 
+  if (view === "mine" && authStatus === "loading") {
+    return <main className="mx-auto w-full max-w-lg p-6 text-neutral-500">Loading your schedule…</main>;
+  }
+  if (view === "mine" && !signedIn) {
+    return (
+      <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-6">
+        <h1 className="text-2xl font-semibold tracking-tight">My Schedule</h1>
+        <p className="text-sm text-neutral-500">Sign in to see your saved schedule.</p>
+        <button
+          onClick={() => signIn("google")}
+          className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
+        >
+          Sign in
+        </button>
+        <Link href={`/g/${code}`} className="text-sm text-blue-600 hover:underline dark:text-blue-400">View group schedule</Link>
+      </main>
+    );
+  }
+
   if (error && !state) {
     return <main className="mx-auto w-full max-w-lg p-6"><p className="text-red-600">{error}</p></main>;
   }
@@ -243,7 +273,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     return <main className="mx-auto w-full max-w-lg p-6 text-neutral-500">Loading…</main>;
   }
 
-  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/g/${code}` : "";
   const thisMonday = mondayOf(new Date());
 
   // Gaps wedged between classes lead — nobody has to make a special trip for
@@ -273,10 +303,12 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{state.group.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{view === "mine" ? "My Schedule" : state.group.name}</h1>
           <p className="text-sm text-neutral-500">
+            {view === "mine" && `${state.group.name} · `}
             {fromTermCode(state.group.term)} · code <span className="font-mono">{state.group.code}</span>
           </p>
+          {view === "mine" && <p className="mt-1 text-sm text-neutral-500">Only your classes and free time are shown.</p>}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
@@ -549,18 +581,19 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
         {me && (
           <div className="mr-2 flex rounded-lg border border-neutral-300 p-0.5 dark:border-neutral-700">
             {(["everyone", "mine"] as const).map((v) => (
-              <button
+              <Link
                 key={v}
-                onClick={() => setView(v)}
-                aria-pressed={view === v}
+                href={v === "mine" ? `/g/${code}?view=mine` : `/g/${code}`}
+                scroll={false}
+                aria-current={view === v ? "page" : undefined}
                 className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
                   view === v
                     ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
                     : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 }`}
               >
-                {v === "everyone" ? "Everyone" : "Just me"}
-              </button>
+                {v === "everyone" ? "Everyone" : "My Schedule"}
+              </Link>
             ))}
           </div>
         )}
@@ -592,6 +625,14 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
           </button>
         )}
       </div>
+
+      {view === "mine" && shown.length === 0 && (
+        <p className="rounded-lg border border-neutral-200 p-4 text-sm text-neutral-500 dark:border-neutral-800">
+          {me
+            ? "You haven't added a schedule yet. Add your courses above to see your week."
+            : "Join this group or claim your name above to see your schedule."}
+        </p>
+      )}
 
       <WeekGrid
         members={shown}

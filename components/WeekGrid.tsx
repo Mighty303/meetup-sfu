@@ -173,17 +173,17 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo =
                         }}
                         onMouseEnter={(e) =>
                           setHover({
-                            title: w.betweenClasses ? "Gap between classes" : "Everyone free",
+                            title: w.betweenClasses ? "Gap between classes" : solo ? "Your free time" : "Everyone free",
                             subtitle: LABELS[day],
                             lines: [
                               `${formatTime(w.start)} – ${formatTime(w.end)} · ${formatDuration(minutes)}`,
                               w.onCampus.length === 0
-                                ? "Nobody has class this day — someone has to travel"
+                                ? solo ? "You have no classes this day" : "Nobody has class this day — someone has to travel"
                                 : `On campus: ${w.onCampus.join(", ")}`,
                               w.campuses.length === 0
                                 ? "No campus anchor — meet anywhere"
                                 : w.sharedCampus
-                                  ? `Everyone near ${w.campuses[0]}`
+                                  ? `${solo ? "You're" : "Everyone"} near ${w.campuses[0]}`
                                   : `Split across ${w.campuses.join(" and ")}`,
                             ],
                             accent: tone.accent,
