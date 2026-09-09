@@ -258,6 +258,8 @@ export async function getGroupState(
         end: b.end_min,
         campus: null, // a custom block doesn't pin them to a campus
         label: b.label,
+        course: b.label,
+        detail: "",
       }));
     busyByMember[member.id] = [...courseBlocks, ...custom];
     unresolved[member.id] = member.classNumbers.filter((cn) => !index.has(cn));

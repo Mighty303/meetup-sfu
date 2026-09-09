@@ -22,6 +22,9 @@ export interface BusyBlock extends Interval {
   day: DayKey;
   campus: string | null; // null for online/unspecified
   label: string; // "CMPT 225 D100 LEC" or a custom block's label
+  /** Split for display: "CMPT 225" reads first, "D100 LEC" is secondary. */
+  course: string;
+  detail: string;
 }
 
 export interface FreeWindow extends Interval {
@@ -128,6 +131,8 @@ export function busyFromCourses(
           end,
           campus: sched.campus.trim() || null,
           label: `${course.dept} ${course.number} ${section.section} ${sched.sectionCode}`,
+          course: `${course.dept} ${course.number}`,
+          detail: `${section.section} ${sched.sectionCode}`,
         });
       }
     }

@@ -108,7 +108,7 @@ const weekend = commonFree({ membersBusy, dayStart, dayEnd, minMinutes: 60, days
 assert.ok(weekend.every((w) => w.day === "Sa"), "explicit days override still works");
 
 // A member who is busy all week must drive the result to nothing.
-const allBusy = [{ day: "Mo" as const, start: 0, end: 1440, campus: "Burnaby", label: "blocked" }];
+const allBusy = [{ day: "Mo" as const, start: 0, end: 1440, campus: "Burnaby", label: "blocked", course: "blocked", detail: "" }];
 const blocked = commonFree({
   membersBusy: [...membersBusy, allBusy],
   dayStart, dayEnd, minMinutes: 60, days: ["Mo"],

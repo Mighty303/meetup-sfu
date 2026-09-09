@@ -193,11 +193,19 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
       </header>
 
       {!signedIn ? (
-        <div className="rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
           <p className="text-neutral-600 dark:text-neutral-300">
-            Sign in with Google to add your schedule. You can see the group without
-            signing in.
+            Sign in with Google to add your schedule — you can view the group
+            without it. Build your schedule first and it&apos;ll be ready to paste.
           </p>
+          <a
+            href={scheduleBuilderUrl(state.group.term)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          >
+            Build it on sfucourses.com ↗
+          </a>
         </div>
       ) : !me ? (
         <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
@@ -238,6 +246,14 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
             >
               {saving ? "Joining…" : unclaimed.length > 0 ? "None of these — add me" : "Join group"}
             </button>
+            <a
+              href={scheduleBuilderUrl(state.group.term)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
+              Build it on sfucourses.com ↗
+            </a>
             {error && <p className="text-sm text-amber-600">{error}</p>}
           </div>
         </div>
