@@ -1,9 +1,19 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthButton } from "@/components/AuthButton";
 import { currentTermCode, fromTermCode } from "@/lib/sfu";
+
+interface Membership {
+  memberId: number;
+  displayName: string;
+  color: string;
+  classNumbers: string[];
+  group: { id: number; code: string; name: string; term: string };
+}
 
 const TERMS = (() => {
   const now = new Date();
@@ -17,11 +27,27 @@ const TERMS = (() => {
 
 export default function Home() {
   const router = useRouter();
+  const { status: authStatus } = useSession();
+  // Null until the fetch lands. Kept on sign-out too, but the render is gated
+  // on the session, so a stale list never shows.
+  const [memberships, setMemberships] = useState<Membership[] | null>(null);
   const [name, setName] = useState("");
   const [term, setTerm] = useState(currentTermCode());
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Signed in on a device you've used before means your groups already exist;
+  // making you dig the invite code back out of a chat would be silly.
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    let live = true;
+    fetch("/api/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (live && data) setMemberships(data.memberships); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [authStatus]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +80,31 @@ export default function Home() {
           on campus at the same time.
         </p>
       </div>
+
+      {authStatus === "authenticated" && memberships && memberships.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium">Your groups</h2>
+          <ul className="flex flex-col gap-1.5">
+            {memberships.map((m) => (
+              <li key={m.memberId}>
+                <Link
+                  href={`/g/${m.group.code}`}
+                  className="flex flex-wrap items-baseline gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
+                >
+                  <span className="h-3 w-3 shrink-0 translate-y-0.5 rounded-sm" style={{ backgroundColor: m.color }} />
+                  <span className="font-medium">{m.group.name}</span>
+                  <span className="text-xs text-neutral-500">{fromTermCode(m.group.term)}</span>
+                  <span className="ml-auto text-xs text-neutral-500">
+                    {m.classNumbers.length > 0
+                      ? `${m.classNumbers.length} section${m.classNumbers.length === 1 ? "" : "s"}`
+                      : "no schedule yet"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <form onSubmit={create} className="flex flex-col gap-3">
         <label className="text-sm font-medium">Start a group</label>
