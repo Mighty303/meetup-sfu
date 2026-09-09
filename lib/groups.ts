@@ -6,10 +6,12 @@ import {
   clampWeekToTerm,
   commonFree,
   termBounds,
+  unscheduledFromCourses,
   weekDates,
   type TermBounds,
   type BusyBlock,
   type FreeWindow,
+  type UnscheduledSection,
 } from "./overlap";
 
 export const MEMBER_COLORS = [
@@ -49,6 +51,8 @@ export interface GroupState {
   free: FreeWindow[];
   /** Class numbers we couldn't resolve — usually saved under a different term. */
   unresolved: Record<number, string[]>;
+  /** Enrolled sections with no timetable slot, so nothing to draw on the grid. */
+  unscheduled: Record<number, UnscheduledSection[]>;
   /** The Monday actually used, after clamping into the term. */
   week: string;
   termBounds: TermBounds | null;
@@ -247,6 +251,7 @@ export async function getGroupState(
 
   const busyByMember: Record<number, BusyBlock[]> = {};
   const unresolved: Record<number, string[]> = {};
+  const unscheduled: Record<number, UnscheduledSection[]> = {};
 
   for (const member of members) {
     const courseBlocks = busyFromCourses(index, member.classNumbers, dates);
@@ -263,6 +268,7 @@ export async function getGroupState(
       }));
     busyByMember[member.id] = [...courseBlocks, ...custom];
     unresolved[member.id] = member.classNumbers.filter((cn) => !index.has(cn));
+    unscheduled[member.id] = unscheduledFromCourses(index, member.classNumbers);
   }
 
   // A member with no schedule yet would otherwise read as "free always" and
@@ -288,6 +294,7 @@ export async function getGroupState(
     busyByMember,
     free,
     unresolved,
+    unscheduled,
     week: dates.Mo,
     termBounds: bounds,
   };

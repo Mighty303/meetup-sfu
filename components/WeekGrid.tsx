@@ -62,14 +62,22 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
   const laneMembers = members.filter((m) => (busyByMember[m.id] ?? []).length > 0);
   const lane = 100 / Math.max(laneMembers.length, 1);
 
+  // A lane narrower than ~46px truncates "CMPT 307" mid-word, so the grid grows
+  // with the number of people and scrolls sideways rather than shrinking lanes
+  // past the point of being readable.
+  const minGridWidth = 56 + 5 * Math.max(124, laneMembers.length * 52);
+
+  // Past three lanes a course code no longer fits at the roomier size, so the
+  // type and padding tighten rather than letting "CMPT 307" clip mid-word.
+  const tight = laneMembers.length >= 4;
+
   const hours: number[] = [];
   for (let m = Math.ceil(dayStart / 60) * 60; m <= dayEnd; m += 60) hours.push(m);
 
   return (
-    // Five columns can't compress below ~700px and stay readable, so on narrow
-    // screens the week scrolls sideways instead of turning into slivers.
+    // On narrow screens the week scrolls sideways instead of turning into slivers.
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <div className="flex min-w-[700px] gap-2 text-xs">
+      <div className="flex gap-2 text-xs" style={{ minWidth: minGridWidth }}>
         {/* Hour gutter. The empty header mirrors the day-name row so the hour
             labels line up with the grid lines instead of sitting a row high. */}
         <div className="w-12 shrink-0">
@@ -191,7 +199,9 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
                         return (
                           <div
                             key={`${member.id}-${bi}`}
-                            className="absolute flex flex-col overflow-hidden rounded-md px-1.5 py-1 leading-tight text-white"
+                            className={`absolute flex flex-col overflow-hidden rounded-md leading-tight text-white ${
+                              tight ? "px-1 py-0.5" : "px-1.5 py-1"
+                            }`}
                             style={{
                               top: `calc(${pct(b.start)}% + ${GAP_Y / 2}px)`,
                               height: `calc(${heightPct(minutes)}% - ${GAP_Y}px)`,
@@ -218,19 +228,19 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
                             }
                             onMouseLeave={() => setHover(null)}
                           >
-                            <span className="truncate text-[11px] font-semibold">
+                            <span className={`truncate font-semibold ${tight ? "text-[10px]" : "text-[11px]"}`}>
                               {b.course}
                             </span>
                             {/* Whose block it is matters more than the section
                                 code, so the name gets the second line and the
                                 section only appears when there's room for it. */}
                             {minutes >= 50 && (
-                              <span className="truncate text-[10px] font-medium text-white/95">
+                              <span className={`truncate font-medium text-white/95 ${tight ? "text-[9px]" : "text-[10px]"}`}>
                                 {member.displayName}
                               </span>
                             )}
                             {minutes >= 80 && b.detail && (
-                              <span className="truncate text-[10px] text-white/80">
+                              <span className={`truncate text-white/80 ${tight ? "text-[9px]" : "text-[10px]"}`}>
                                 {b.detail}
                               </span>
                             )}

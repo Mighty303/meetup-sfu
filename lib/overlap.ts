@@ -140,6 +140,41 @@ export function busyFromCourses(
   return blocks;
 }
 
+export interface UnscheduledSection {
+  classNumber: string;
+  course: string; // "CMPT 300"
+  section: string; // "D100"
+  sectionCode: string; // LEC, IND, OLC, COP...
+  deliveryMethod: string; // In Person, Online, Blended
+}
+
+/**
+ * Sections a member is enrolled in that never meet at a fixed time — online and
+ * async courses, but also independent study, co-op and capstone, which are
+ * "In Person" yet have no timetable slot. They can't block or free any part of
+ * the week, so they'd otherwise vanish from the app entirely.
+ */
+export function unscheduledFromCourses(
+  index: Map<string, { course: CourseWithSections; section: SectionDetail }>,
+  classNumbers: string[]
+): UnscheduledSection[] {
+  const out: UnscheduledSection[] = [];
+  for (const classNumber of classNumbers) {
+    const hit = index.get(classNumber);
+    if (!hit) continue;
+    const { course, section } = hit;
+    if (section.schedules.some((s) => s.days.trim())) continue;
+    out.push({
+      classNumber,
+      course: `${course.dept} ${course.number}`,
+      section: section.section,
+      sectionCode: section.schedules[0]?.sectionCode ?? "",
+      deliveryMethod: section.deliveryMethod,
+    });
+  }
+  return out;
+}
+
 /**
  * The campus a member is tied to around `window` on that day: whichever class
  * sits closest to it, preferring the one before (that's where they already are).

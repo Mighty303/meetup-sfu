@@ -5,7 +5,7 @@ import Image from "next/image";
 import { use, useCallback, useEffect, useState } from "react";
 import { AuthButton } from "@/components/AuthButton";
 import { WeekGrid } from "@/components/WeekGrid";
-import type { BusyBlock, FreeWindow } from "@/lib/overlap";
+import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
 import { formatTime, fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
 
 interface Member {
@@ -23,6 +23,7 @@ interface GroupState {
   busyByMember: Record<number, BusyBlock[]>;
   free: FreeWindow[];
   unresolved: Record<number, string[]>;
+  unscheduled: Record<number, UnscheduledSection[]>;
   week: string;
   termBounds: { start: string; end: string; typicalStart: string } | null;
 }
@@ -178,6 +179,11 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const thisMonday = mondayOf(new Date());
+
+  // Pair each member with their untimetabled sections, dropping anyone who has none.
+  const unscheduledMembers = state.members
+    .map((m) => [m, state.unscheduled[m.id] ?? []] as const)
+    .filter(([, sections]) => sections.length > 0);
 
   // A week counts as in-term if any of it overlaps the term's date range;
   // paging past either end would just show a grid with no classes on it.
@@ -476,6 +482,41 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
           </ul>
         )}
       </section>
+
+      {unscheduledMembers.length > 0 && (
+        <section>
+          <h2 className="mb-1 font-medium">No meeting times</h2>
+          <p className="mb-2 text-xs text-neutral-500">
+            Online, async, co-op and independent study sections. They have no
+            timetable slot, so they don&apos;t appear on the grid or affect the
+            free windows above.
+          </p>
+          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+            {unscheduledMembers.map(([member, sections]) =>
+              sections.map((sec) => (
+                <li
+                  key={`${member.id}-${sec.classNumber}`}
+                  className="flex items-baseline gap-2 rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+                >
+                  <span className="h-2.5 w-2.5 shrink-0 translate-y-0.5 rounded-sm" style={{ backgroundColor: member.color }} />
+                  <span className="font-medium">{sec.course}</span>
+                  <span className="text-xs text-neutral-500">
+                    {sec.section}{sec.sectionCode ? ` ${sec.sectionCode}` : ""}
+                  </span>
+                  <span className="ml-auto text-xs text-neutral-500">
+                    {member.displayName}
+                    {sec.deliveryMethod && sec.deliveryMethod !== "In Person" && (
+                      <span className="ml-1 text-blue-600 dark:text-blue-400">
+                        · {sec.deliveryMethod}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))
+            )}
+          </ul>
+        </section>
+      )}
     </main>
   );
 }
