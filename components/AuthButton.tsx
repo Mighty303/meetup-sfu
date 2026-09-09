@@ -36,18 +36,18 @@ export function AuthButton() {
           className="rounded-full"
         />
       )}
-      {/* The name doubles as the way into the profile — one less thing in the
-          header than a separate link would be. */}
-      {pathname === "/profile" ? (
-        <span className="max-w-[7rem] truncate text-sm text-neutral-600 sm:max-w-none dark:text-neutral-300">
-          {session.user.name ?? session.user.email}
-        </span>
-      ) : (
+      <span className="max-w-[7rem] truncate text-sm text-neutral-600 sm:max-w-none dark:text-neutral-300">
+        {session.user.name ?? session.user.email}
+      </span>
+      {/* Hidden on the profile page itself, where it would only point at the
+          page you're already looking at. */}
+      {pathname !== "/profile" && (
         <Link
           href="/profile"
-          className="max-w-[7rem] truncate text-sm text-neutral-600 underline-offset-2 hover:underline sm:max-w-none dark:text-neutral-300"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
         >
-          {session.user.name ?? session.user.email}
+          <PersonMark />
+          Profile
         </Link>
       )}
       <button
@@ -57,6 +57,15 @@ export function AuthButton() {
         Sign out
       </button>
     </div>
+  );
+}
+
+function PersonMark() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <circle cx="8" cy="5" r="2.75" />
+      <path d="M2.5 14c0-2.8 2.5-4.5 5.5-4.5s5.5 1.7 5.5 4.5" strokeLinecap="round" />
+    </svg>
   );
 }
 
