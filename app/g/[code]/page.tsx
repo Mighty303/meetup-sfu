@@ -35,7 +35,29 @@ const DAY_LABELS: Record<string, string> = {
 function mondayOf(d: Date): string {
   const m = new Date(d);
   m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
-  return `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}-${String(m.getDate()).padStart(2, "0")}`;
+  return toISODate(m);
+}
+
+function toISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Midday avoids the date shifting under daylight-saving transitions. */
+function parseISODate(iso: string): Date {
+  return new Date(`${iso}T12:00:00`);
+}
+
+function addDays(iso: string, days: number): string {
+  const d = parseISODate(iso);
+  d.setDate(d.getDate() + days);
+  return toISODate(d);
+}
+
+function shortDate(iso: string): string {
+  return parseISODate(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 const DAY_START = 8 * 60;
@@ -155,6 +177,19 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   }
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const thisMonday = mondayOf(new Date());
+
+  // A week counts as in-term if any of it overlaps the term's date range;
+  // paging past either end would just show a grid with no classes on it.
+  function weekInTerm(monday: string): boolean {
+    const b = state?.termBounds;
+    if (!b) return true;
+    return addDays(monday, 6) >= b.start && monday <= b.end;
+  }
+
+  function canPage(direction: -1 | 1): boolean {
+    return week !== null && weekInTerm(addDays(week, direction * 7));
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
@@ -340,12 +375,35 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
       )}
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
-        <label className="flex items-center gap-2">
-          Week of
-          <input type="date" value={week ?? ""} min={state.termBounds?.start} max={state.termBounds?.end}
-            onChange={(e) => e.target.value && setWeek(mondayOf(new Date(`${e.target.value}T12:00:00`)))}
-            className="rounded-lg border border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900" />
-        </label>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => week && setWeek(addDays(week, -7))}
+            disabled={!canPage(-1)}
+            aria-label="Previous week"
+            className="rounded-lg border border-neutral-300 px-2 py-1 leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            ←
+          </button>
+          <span className="min-w-[9.5rem] text-center tabular-nums">
+            {week ? `${shortDate(week)} – ${shortDate(addDays(week, 4))}` : "—"}
+          </span>
+          <button
+            onClick={() => week && setWeek(addDays(week, 7))}
+            disabled={!canPage(1)}
+            aria-label="Next week"
+            className="rounded-lg border border-neutral-300 px-2 py-1 leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            →
+          </button>
+          {week !== thisMonday && weekInTerm(thisMonday) && (
+            <button
+              onClick={() => setWeek(thisMonday)}
+              className="ml-1 rounded-lg border border-neutral-300 px-2 py-1 text-xs transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+            >
+              This week
+            </button>
+          )}
+        </div>
         <label className="flex items-center gap-2">
           At least
           <select value={minMinutes} onChange={(e) => setMinMinutes(Number(e.target.value))}
@@ -377,9 +435,10 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
         </div>
       </div>
 
-      {state.week !== mondayOf(new Date()) && (
+      {!weekInTerm(thisMonday) && (
         <p className="-mt-3 text-xs text-neutral-500">
-          Showing the week of {state.week} — today falls outside {fromTermCode(state.group.term)}.
+          Today falls outside {fromTermCode(state.group.term)}, so this starts at
+          the first week of term.
         </p>
       )}
 
