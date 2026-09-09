@@ -16,6 +16,12 @@ export interface Member {
 // while staying short enough to see the whole week without scrolling on a phone.
 const COLUMN_HEIGHT = "h-[460px] sm:h-[600px] lg:h-[720px] xl:h-[820px]";
 
+// Blocks are placed by percentage, so back-to-back classes would share an edge
+// and read as one long block. Insetting by a fixed pixel amount keeps the gap
+// constant at every column height, instead of scaling with the class length.
+const GAP_Y = 2;
+const GAP_X = 3;
+
 interface Props {
   members: Member[];
   busyByMember: Record<number, BusyBlock[]>;
@@ -96,12 +102,12 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
                     .map((b, bi) => (
                       <div
                         key={`${member.id}-${bi}`}
-                        className="absolute overflow-hidden rounded-sm px-1 text-[9px] leading-tight text-white/95"
+                        className="absolute overflow-hidden rounded-md px-1 py-0.5 text-[9px] leading-tight text-white/95"
                         style={{
-                          top: `${pct(b.start)}%`,
-                          height: `${((b.end - b.start) / span) * 100}%`,
-                          left: `${mi * lane}%`,
-                          width: `${lane}%`,
+                          top: `calc(${pct(b.start)}% + ${GAP_Y / 2}px)`,
+                          height: `calc(${((b.end - b.start) / span) * 100}% - ${GAP_Y}px)`,
+                          left: `calc(${mi * lane}% + ${GAP_X / 2}px)`,
+                          width: `calc(${lane}% - ${GAP_X}px)`,
                           backgroundColor: member.color,
                           opacity: 0.85,
                         }}
