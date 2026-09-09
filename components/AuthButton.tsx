@@ -2,16 +2,9 @@
 
 import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 export function AuthButton() {
   const { data: session, status } = useSession();
-  const pathname = usePathname();
-  // Carry the group you're looking at into the profile, so its back link can
-  // return you to that schedule rather than to the home page.
-  const fromGroup = pathname.startsWith("/g/") ? pathname.split("/")[2] : null;
-
   if (status === "loading") {
     return <div className="h-8 w-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />;
   }
@@ -42,17 +35,6 @@ export function AuthButton() {
       <span className="max-w-[7rem] truncate text-sm text-neutral-600 sm:max-w-none dark:text-neutral-300">
         {session.user.name ?? session.user.email}
       </span>
-      {/* Hidden on the profile page itself, where it would only point at the
-          page you're already looking at. */}
-      {pathname !== "/profile" && (
-        <Link
-          href={fromGroup ? `/profile?from=${encodeURIComponent(fromGroup)}` : "/profile"}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-        >
-          <PersonMark />
-          Profile
-        </Link>
-      )}
       <button
         onClick={() => signOut()}
         className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
@@ -63,14 +45,6 @@ export function AuthButton() {
   );
 }
 
-function PersonMark() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <circle cx="8" cy="5" r="2.75" />
-      <path d="M2.5 14c0-2.8 2.5-4.5 5.5-4.5s5.5 1.7 5.5 4.5" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function GoogleMark() {
   return (

@@ -3,7 +3,6 @@
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
-import { AuthButton } from "@/components/AuthButton";
 import { WeekGrid } from "@/components/WeekGrid";
 import { commonFree, partialFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
@@ -275,7 +274,6 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <AuthButton />
           <div className="flex items-center gap-2">
             {/* Always visible: clipboard access is unreliable (it silently never
                 settles when the document isn't focused), and people want to see

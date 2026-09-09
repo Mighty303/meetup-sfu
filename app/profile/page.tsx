@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { AuthButton } from "@/components/AuthButton";
 import { fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
 
 interface Membership {
@@ -195,7 +194,6 @@ export default function ProfilePage() {
             <BackLink fallbackCode={data?.memberships[0]?.group.code ?? null} />
           </Suspense>
         </div>
-        <AuthButton />
       </header>
 
       {!data ? (
