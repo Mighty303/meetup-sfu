@@ -281,7 +281,10 @@ export async function getGroupState(
     participating.length === 0
       ? []
       : commonFree({
-          membersBusy: participating.map((m) => busyByMember[m.id]),
+          members: participating.map((m) => ({
+            name: m.displayName,
+            busy: busyByMember[m.id],
+          })),
           dayStart: opts.dayStart,
           dayEnd: opts.dayEnd,
           minMinutes: opts.minMinutes,

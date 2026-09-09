@@ -2,11 +2,12 @@
 
 import { useSession } from "next-auth/react";
 import Image from "next/image";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { AuthButton } from "@/components/AuthButton";
 import { WeekGrid } from "@/components/WeekGrid";
+import { commonFree, partialFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
-import { formatTime, fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
+import { WEEKDAYS, formatTime, fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
 
 interface Member {
   id: number;
@@ -61,6 +62,16 @@ function shortDate(iso: string): string {
   });
 }
 
+/** Mon-first, so the list reads down the week. Unknown days sort last. */
+function dayOrder(day: string): number {
+  const i = (WEEKDAYS as readonly string[]).indexOf(day);
+  return i === -1 ? WEEKDAYS.length : i;
+}
+
+// Shorter than this isn't worth crossing campus for, and nobody was going to
+// tune it — so it's fixed rather than a control.
+const MIN_MINUTES = 60;
+
 const DAY_START = 8 * 60;
 const DAY_END = 22 * 60;
 
@@ -72,7 +83,10 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   const [error, setError] = useState<string | null>(null);
   // Null until the server tells us which week is actually inside the term.
   const [week, setWeek] = useState<string | null>(null);
-  const [minMinutes, setMinMinutes] = useState(60);
+  // Member ids ticked off in the list. Kept as ids, not indices, so it survives
+  // someone joining or leaving mid-session.
+  const [hidden, setHidden] = useState<Set<number>>(new Set());
+  const [showAllPartial, setShowAllPartial] = useState(false);
   const [link, setLink] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
@@ -80,9 +94,9 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   const load = useCallback(async () => {
-    const res = await fetch(
-      `/api/groups/${code}?minMinutes=${minMinutes}${week ? `&week=${week}` : ""}`
-    );
+    // No minMinutes here: the page derives its own windows from busyByMember, so
+    // changing the duration (or ticking someone off) is instant, not a round-trip.
+    const res = await fetch(`/api/groups/${code}${week ? `?week=${week}` : ""}`);
     if (!res.ok) {
       setError(res.status === 404 ? "No group with that code." : "Could not load this group.");
       return;
@@ -92,7 +106,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     setState(next);
     // First load: adopt the server's clamped week so the picker matches the grid.
     setWeek((cur) => cur ?? next.week);
-  }, [code, week, minMinutes]);
+  }, [code, week]);
 
   // Fetch on mount and whenever the week/duration filters change. The state
   // updates happen after an await, not synchronously, so the cascading-render
@@ -170,6 +184,54 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     load();
   }
 
+  // Only people with a schedule can constrain anything — someone who hasn't
+  // pasted theirs would read as "free always" and silently widen every window.
+  const scheduled = useMemo(
+    () =>
+      (state?.members ?? []).filter(
+        (m) => m.classNumbers.length > 0 || (state?.busyByMember[m.id]?.length ?? 0) > 0
+      ),
+    [state]
+  );
+  const shown = useMemo(() => scheduled.filter((m) => !hidden.has(m.id)), [scheduled, hidden]);
+
+  const schedules = useMemo(
+    () => shown.map((m) => ({ name: m.displayName, busy: state?.busyByMember[m.id] ?? [] })),
+    [shown, state]
+  );
+
+  // Recomputed here rather than refetched. Ticking someone off is a filter over
+  // data the page already holds, and a round-trip would make it feel like a
+  // reload — the server's own `free` is for API callers, not for this view.
+  const free = useMemo(
+    () =>
+      schedules.length >= 2
+        ? commonFree({ members: schedules, dayStart: DAY_START, dayEnd: DAY_END, minMinutes: MIN_MINUTES })
+        : [],
+    [schedules]
+  );
+
+  // Windows where only part of the group can make it. Two people already on
+  // campus is a real meetup, so those sort to the top; the full-group ones are
+  // dropped because they're listed on their own above.
+  const partial = useMemo(() => {
+    if (schedules.length < 3) return []; // with two, "some of you" is the same list
+    return partialFree({
+      members: schedules,
+      dayStart: DAY_START,
+      dayEnd: DAY_END,
+      minMinutes: MIN_MINUTES,
+    })
+      .filter((w) => !w.everyone)
+      .sort(
+        (a, b) =>
+          Number(b.onCampus.length >= 2) - Number(a.onCampus.length >= 2) ||
+          b.attendees.length - a.attendees.length ||
+          dayOrder(a.day) - dayOrder(b.day) ||
+          a.start - b.start
+      );
+  }, [schedules]);
+
   if (error && !state) {
     return <main className="mx-auto w-full max-w-lg p-6"><p className="text-red-600">{error}</p></main>;
   }
@@ -180,8 +242,14 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const thisMonday = mondayOf(new Date());
 
-  // Pair each member with their untimetabled sections, dropping anyone who has none.
-  const unscheduledMembers = state.members
+  // Gaps wedged between classes lead — nobody has to make a special trip for
+  // them. The rest are still worth listing, just further down.
+  const gaps = free.filter((w) => w.betweenClasses);
+  const otherFree = free.filter((w) => !w.betweenClasses);
+
+  // Pair each member with their untimetabled sections, dropping anyone who has
+  // none — and anyone ticked off, since nothing else on the page counts them.
+  const unscheduledMembers = shown
     .map((m) => [m, state.unscheduled[m.id] ?? []] as const)
     .filter(([, sections]) => sections.length > 0);
 
@@ -227,7 +295,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
               }}
               className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
             >
-              {copyState === "copied" ? "Copied ✓" : copyState === "failed" ? "Select & copy ↑" : "Copy link"}
+              {copyState === "copied" ? "Copied" : copyState === "failed" ? "Select & copy ↑" : "Copy link"}
             </button>
           </div>
         </div>
@@ -410,36 +478,95 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
             </button>
           )}
         </div>
-        <label className="flex items-center gap-2">
-          At least
-          <select value={minMinutes} onChange={(e) => setMinMinutes(Number(e.target.value))}
-            className="rounded-lg border border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900">
-            {[30, 60, 90, 120, 180].map((m) => <option key={m} value={m}>{m} min</option>)}
-          </select>
-        </label>
-        <div className="flex flex-wrap gap-3">
-          {state.members.map((m) => (
-            <span key={m.id} className="flex items-center gap-1.5">
-              {m.image ? (
-                <Image src={m.image} alt="" width={16} height={16} className="rounded-full" />
-              ) : (
-                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: m.color }} />
-              )}
-              <span style={{ color: m.color }}>{m.displayName}</span>
-              {m.classNumbers.length === 0 && (
-                <span className="text-neutral-400" title="Not counted in the overlap until they add a schedule">
-                  (no schedule yet)
-                </span>
-              )}
-              {state.unresolved[m.id]?.length > 0 && (
-                <span className="text-amber-600" title={`Not in ${fromTermCode(state.group.term)}: ${state.unresolved[m.id].join(", ")}`}>
-                  ⚠ {state.unresolved[m.id].length}
-                </span>
-              )}
-            </span>
-          ))}
-        </div>
       </div>
+
+      <section>
+        <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="font-medium">Who&apos;s in</h2>
+          <p className="text-xs text-neutral-500">
+            Tick someone off and the grid and windows below recompute without
+            them — useful when one schedule is blocking every slot.
+          </p>
+          {shown.length < scheduled.length && (
+            <button
+              onClick={() => setHidden(new Set())}
+              className="ml-auto text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
+              Include everyone
+            </button>
+          )}
+        </div>
+        <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+          {state.members.map((m) => {
+            const hasSchedule = scheduled.some((s) => s.id === m.id);
+            const on = hasSchedule && !hidden.has(m.id);
+            const unresolved = state.unresolved[m.id]?.length ?? 0;
+            return (
+              <li key={m.id}>
+                <label
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    hasSchedule
+                      ? on
+                        ? "border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                        : "border-dashed border-neutral-300 opacity-55 hover:opacity-80 dark:border-neutral-700"
+                      : "cursor-not-allowed border-dashed border-neutral-200 opacity-55 dark:border-neutral-800"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    disabled={!hasSchedule}
+                    onChange={() =>
+                      setHidden((cur) => {
+                        const next = new Set(cur);
+                        if (next.has(m.id)) next.delete(m.id);
+                        else next.add(m.id);
+                        return next;
+                      })
+                    }
+                    className="peer sr-only"
+                  />
+                  {/* A hairline ring that fills when they're counted — the row
+                      already carries the state in its border and opacity, so
+                      the toggle only has to hint, not shout. */}
+                  <span
+                    aria-hidden
+                    className="h-3 w-3 shrink-0 rounded-full border border-neutral-400 transition-colors peer-checked:border-neutral-900 peer-checked:bg-neutral-900 peer-focus-visible:ring-2 peer-focus-visible:ring-neutral-400 dark:border-neutral-600 dark:peer-checked:border-white dark:peer-checked:bg-white"
+                  />
+                  {m.image ? (
+                    <Image src={m.image} alt="" width={18} height={18} className="shrink-0 rounded-full" />
+                  ) : (
+                    <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: m.color }} />
+                  )}
+                  <span className="truncate font-medium" style={{ color: m.color }}>
+                    {m.displayName}
+                  </span>
+                  <span className="ml-auto shrink-0 text-xs text-neutral-500">
+                    {!hasSchedule
+                      ? "no schedule yet"
+                      : `${m.classNumbers.length} section${m.classNumbers.length === 1 ? "" : "s"}`}
+                  </span>
+                  {unresolved > 0 && (
+                    <span
+                      className="shrink-0 text-xs text-amber-600"
+                      title={`Not in ${fromTermCode(state.group.term)}: ${state.unresolved[m.id].join(", ")}`}
+                    >
+                      ⚠ {unresolved}
+                    </span>
+                  )}
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+        {shown.length < 2 && (
+          <p className="mt-2 text-sm text-amber-600">
+            {scheduled.length < 2
+              ? "Two people need a saved schedule before there's an overlap to find."
+              : "Tick at least two people back on — one person alone has nothing to overlap with."}
+          </p>
+        )}
+      </section>
 
       {!weekInTerm(thisMonday) && (
         <p className="-mt-3 text-xs text-neutral-500">
@@ -449,24 +576,70 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
       )}
 
       <WeekGrid
-        members={state.members}
+        members={shown}
         busyByMember={state.busyByMember}
-        free={state.free}
+        free={free}
         dayStart={DAY_START}
         dayEnd={DAY_END}
       />
 
       <section>
-        <h2 className="mb-2 font-medium">
-          Everyone free {state.free.some((w) => !w.sharedCampus) && "(green = same campus)"}
-        </h2>
-        {state.free.length === 0 ? (
+        <h2 className="mb-1 font-medium">Gaps between classes</h2>
+        <p className="mb-2 text-xs text-neutral-500">
+          Windows with a class on both sides, for everyone ticked on above. Names
+          are the people who have class that day, so they&apos;re on campus
+          already — anyone else would be making the trip specially.
+        </p>
+        {gaps.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            No shared window this week at {minMinutes} min. Try a shorter minimum.
+            No hour-long gap this week for everyone ticked on
+            {partial.length > 0
+              ? " — tick someone off, or take one of the part-group windows below"
+              : otherFree.length > 0 && " — or use one of the open windows below"}
+            .
           </p>
         ) : (
           <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-            {state.free.map((w, i) => (
+            {gaps.map((w, i) => (
+              <li
+                key={i}
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  w.sharedCampus
+                    ? "border-emerald-500/60 bg-emerald-400/10"
+                    : "border-amber-500/50 bg-amber-300/10"
+                }`}
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className="w-20 shrink-0 font-medium">{DAY_LABELS[w.day] ?? w.day}</span>
+                  <span className="tabular-nums">{formatTime(w.start)} – {formatTime(w.end)}</span>
+                  <span className="ml-auto text-xs text-neutral-500">
+                    {w.campuses.length === 0
+                      ? "anywhere"
+                      : w.sharedCampus
+                        ? w.campuses[0]
+                        : `split: ${w.campuses.join(" / ")}`}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-300">
+                  {w.onCampus.length === 0
+                    ? "nobody has class this day — someone has to travel"
+                    : `on campus: ${w.onCampus.join(", ")}`}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {otherFree.length > 0 && (
+        <section>
+          <h2 className="mb-1 font-medium">Other free windows</h2>
+          <p className="mb-2 text-xs text-neutral-500">
+            Everyone is free, but it&apos;s before the first class or after the last —
+            someone has to come to campus for it.
+          </p>
+          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+            {otherFree.map((w, i) => (
               <li key={i} className="flex items-baseline gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800">
                 <span className="w-20 shrink-0 font-medium">{DAY_LABELS[w.day] ?? w.day}</span>
                 <span className="tabular-nums">{formatTime(w.start)} – {formatTime(w.end)}</span>
@@ -480,8 +653,68 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
+
+      {partial.length > 0 && (
+        <section>
+          <h2 className="mb-1 font-medium">Some of you free</h2>
+          <p className="mb-2 text-xs text-neutral-500">
+            Windows the whole group can&apos;t make, but part of it can. Two
+            people already on campus is a meetup nobody has to travel for, so
+            those come first.
+          </p>
+          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+            {(showAllPartial ? partial : partial.slice(0, 12)).map((w, i) => {
+              const onCampus = w.onCampus.length >= 2;
+              return (
+                <li
+                  key={i}
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    onCampus
+                      ? "border-emerald-500/40 bg-emerald-400/5"
+                      : "border-neutral-200 dark:border-neutral-800"
+                  }`}
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="w-20 shrink-0 font-medium">{DAY_LABELS[w.day] ?? w.day}</span>
+                    <span className="tabular-nums">{formatTime(w.start)} – {formatTime(w.end)}</span>
+                    <span className="ml-auto shrink-0 text-xs text-neutral-500">
+                      {w.attendees.length} of {shown.length}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-neutral-600 dark:text-neutral-300">
+                    {w.attendees.join(", ")}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
+                    <span>
+                      {w.campuses.length === 0
+                        ? "anywhere"
+                        : w.sharedCampus
+                          ? w.campuses[0]
+                          : `split: ${w.campuses.join(" / ")}`}
+                    </span>
+                    {onCampus && (
+                      <span className="text-emerald-700 dark:text-emerald-400">
+                        · {w.onCampus.length} on campus
+                      </span>
+                    )}
+                    {w.betweenClasses && <span>· between classes</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {partial.length > 12 && (
+            <button
+              onClick={() => setShowAllPartial((v) => !v)}
+              className="mt-2 text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
+              {showAllPartial ? "Show fewer" : `Show all ${partial.length}`}
+            </button>
+          )}
+        </section>
+      )}
 
       {unscheduledMembers.length > 0 && (
         <section>

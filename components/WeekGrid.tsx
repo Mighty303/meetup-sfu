@@ -16,6 +16,45 @@ const GAP_X = 3;
 
 const COLUMN_HEIGHT = "h-[520px] sm:h-[660px] lg:h-[780px] xl:h-[880px]";
 
+/**
+ * A gap between classes is the window worth meeting in — everyone is already on
+ * campus and has to stay for a later class. Free time before the first class or
+ * after the last one is real, but it competes with going home, so it's dimmed
+ * rather than coloured. Within the gaps, campus still decides green vs amber.
+ */
+function freeStyle(w: FreeWindow) {
+  if (!w.betweenClasses) {
+    return {
+      box: "bg-neutral-400/10 ring-1 ring-inset ring-neutral-400/30 dark:bg-neutral-400/10",
+      strong: "text-neutral-600 dark:text-neutral-300",
+      soft: "text-neutral-500 dark:text-neutral-400",
+      accent: "#a3a3a3",
+      tag: "FREE",
+    };
+  }
+  return w.sharedCampus
+    ? {
+        box: "bg-emerald-400/30 ring-2 ring-inset ring-emerald-500/60",
+        strong: "text-emerald-800 dark:text-emerald-200",
+        soft: "text-emerald-800/80 dark:text-emerald-200/80",
+        accent: "#10b981",
+        tag: "GAP · ALL FREE",
+      }
+    : {
+        box: "bg-amber-300/25 ring-2 ring-inset ring-amber-500/50",
+        strong: "text-amber-800 dark:text-amber-200",
+        soft: "text-amber-800/80 dark:text-amber-200/80",
+        accent: "#f59e0b",
+        tag: "GAP · SPLIT",
+      };
+}
+
+/** "Ann, Bo, Cy" — and "+2" past three, so the block stays one line. */
+function nameList(names: string[], max = 3): string {
+  if (names.length <= max) return names.join(", ");
+  return `${names.slice(0, max).join(", ")} +${names.length - max}`;
+}
+
 /** 80 -> "1h 20m", 50 -> "50m" */
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -114,36 +153,36 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
                     />
                   ))}
 
-                  {/* Everyone-free windows sit behind the busy bands. A window
-                      where everyone is anchored to one campus is the thing
-                      worth spotting, so it gets the strongest treatment. */}
+                  {/* Free windows sit behind the busy bands. Gaps between
+                      classes are the ones worth spotting, so they carry the
+                      colour; the rest stay grey. */}
                   {dayFree.map((w, i) => {
                     const minutes = w.end - w.start;
+                    const tone = freeStyle(w);
                     return (
                       <div
                         key={`free-${i}`}
-                        className={`absolute inset-x-0 flex flex-col items-center justify-center gap-0.5 text-center ${
-                          w.sharedCampus
-                            ? "bg-emerald-400/30 ring-2 ring-inset ring-emerald-500/60"
-                            : "bg-amber-300/20 ring-1 ring-inset ring-amber-500/40"
-                        }`}
+                        className={`absolute inset-x-0 flex flex-col items-center justify-center gap-0.5 px-1 text-center ${tone.box}`}
                         style={{
                           top: `${pct(w.start)}%`,
                           height: `${heightPct(minutes)}%`,
                         }}
                         onMouseEnter={(e) =>
                           setHover({
-                            title: "Everyone free",
+                            title: w.betweenClasses ? "Gap between classes" : "Everyone free",
                             subtitle: LABELS[day],
                             lines: [
                               `${formatTime(w.start)} – ${formatTime(w.end)} · ${formatDuration(minutes)}`,
+                              w.onCampus.length === 0
+                                ? "Nobody has class this day — someone has to travel"
+                                : `On campus: ${w.onCampus.join(", ")}`,
                               w.campuses.length === 0
                                 ? "No campus anchor — meet anywhere"
                                 : w.sharedCampus
                                   ? `Everyone near ${w.campuses[0]}`
                                   : `Split across ${w.campuses.join(" and ")}`,
                             ],
-                            accent: w.sharedCampus ? "#10b981" : "#f59e0b",
+                            accent: tone.accent,
                             x: e.clientX,
                             y: e.clientY,
                           })
@@ -153,34 +192,24 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
                         }
                         onMouseLeave={() => setHover(null)}
                       >
-                        {minutes >= 75 && (
+                        {minutes >= 60 && (
                           <>
-                            <span
-                              className={`text-[10px] font-semibold tracking-wide ${
-                                w.sharedCampus
-                                  ? "text-emerald-800 dark:text-emerald-200"
-                                  : "text-amber-800 dark:text-amber-200"
-                              }`}
-                            >
-                              {w.sharedCampus ? "ALL FREE" : "ALL FREE · SPLIT"}
+                            <span className={`text-[10px] font-semibold tracking-wide ${tone.strong}`}>
+                              {tone.tag}
                             </span>
-                            <span
-                              className={`text-[10px] tabular-nums ${
-                                w.sharedCampus
-                                  ? "text-emerald-800/80 dark:text-emerald-200/80"
-                                  : "text-amber-800/80 dark:text-amber-200/80"
-                              }`}
-                            >
+                            <span className={`text-[10px] tabular-nums ${tone.soft}`}>
                               {formatTime(w.start)}–{formatTime(w.end)}
                             </span>
-                            {minutes >= 120 && w.campuses.length > 0 && (
-                              <span
-                                className={`text-[10px] ${
-                                  w.sharedCampus
-                                    ? "text-emerald-800/70 dark:text-emerald-200/70"
-                                    : "text-amber-800/70 dark:text-amber-200/70"
-                                }`}
-                              >
+                            {/* Who's already on campus matters more than where,
+                                so names take the next line and the campus only
+                                shows when the block is tall enough for both. */}
+                            {minutes >= 90 && w.onCampus.length > 0 && (
+                              <span className={`w-full truncate text-[10px] font-medium ${tone.strong}`}>
+                                {nameList(w.onCampus)}
+                              </span>
+                            )}
+                            {minutes >= 130 && w.campuses.length > 0 && (
+                              <span className={`text-[10px] ${tone.soft}`}>
                                 {w.campuses.join(" / ")}
                               </span>
                             )}
