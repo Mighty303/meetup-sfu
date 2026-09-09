@@ -302,3 +302,38 @@ export async function getGroupState(
     termBounds: bounds,
   };
 }
+
+export interface Membership {
+  memberId: number;
+  displayName: string;
+  color: string;
+  classNumbers: string[];
+  group: Group;
+}
+
+/**
+ * Every group a signed-in user has a member row in — what the profile page
+ * edits. Ownerless rows are invisible here by design: nothing ties them to a
+ * user until they're claimed from the group page.
+ */
+export async function listMembershipsForUser(userId: number): Promise<Membership[]> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT m.id AS member_id, m.display_name, m.color,
+           g.id AS group_id, g.code, g.name, g.term,
+           COALESCE(ARRAY_AGG(mc.class_number) FILTER (WHERE mc.class_number IS NOT NULL), '{}') AS class_numbers
+    FROM meetup.members m
+    JOIN meetup.groups g ON g.id = m.group_id
+    LEFT JOIN meetup.member_courses mc ON mc.member_id = m.id
+    WHERE m.user_id = ${userId}
+    GROUP BY m.id, g.id
+    ORDER BY g.created_at DESC
+  `;
+  return rows.map((r) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    color: r.color,
+    classNumbers: r.class_numbers as string[],
+    group: { id: r.group_id, code: r.code, name: r.name, term: r.term },
+  }));
+}

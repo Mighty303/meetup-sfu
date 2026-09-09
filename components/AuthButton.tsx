@@ -2,9 +2,12 @@
 
 import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function AuthButton() {
   const { data: session, status } = useSession();
+  const pathname = usePathname();
 
   if (status === "loading") {
     return <div className="h-8 w-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />;
@@ -33,9 +36,20 @@ export function AuthButton() {
           className="rounded-full"
         />
       )}
-      <span className="hidden text-sm text-neutral-600 sm:inline dark:text-neutral-300">
-        {session.user.name ?? session.user.email}
-      </span>
+      {/* The name doubles as the way into the profile — one less thing in the
+          header than a separate link would be. */}
+      {pathname === "/profile" ? (
+        <span className="max-w-[7rem] truncate text-sm text-neutral-600 sm:max-w-none dark:text-neutral-300">
+          {session.user.name ?? session.user.email}
+        </span>
+      ) : (
+        <Link
+          href="/profile"
+          className="max-w-[7rem] truncate text-sm text-neutral-600 underline-offset-2 hover:underline sm:max-w-none dark:text-neutral-300"
+        >
+          {session.user.name ?? session.user.email}
+        </Link>
+      )}
       <button
         onClick={() => signOut()}
         className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
