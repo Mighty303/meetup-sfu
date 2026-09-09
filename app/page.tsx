@@ -1,10 +1,10 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AuthButton } from "@/components/AuthButton";
 import { currentTermCode, fromTermCode } from "@/lib/sfu";
 
 interface Membership {
@@ -13,6 +13,13 @@ interface Membership {
   color: string;
   classNumbers: string[];
   group: { id: number; code: string; name: string; term: string };
+  members: {
+    id: number;
+    displayName: string;
+    color: string;
+    image: string | null;
+    hasSchedule: boolean;
+  }[];
 }
 
 const TERMS = (() => {
@@ -68,11 +75,7 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-8 p-6">
-      <div className="flex justify-end">
-        <AuthButton />
-      </div>
-
+    <main className="mx-auto flex w-full max-w-lg flex-col justify-center gap-8 p-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">meetup-sfu</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400">
@@ -89,16 +92,35 @@ export default function Home() {
               <li key={m.memberId}>
                 <Link
                   href={`/g/${m.group.code}`}
-                  className="flex flex-wrap items-baseline gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
+                  className="flex flex-col gap-2 rounded-lg border border-neutral-200 px-3 py-3 transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
                 >
-                  <span className="h-3 w-3 shrink-0 translate-y-0.5 rounded-sm" style={{ backgroundColor: m.color }} />
-                  <span className="font-medium">{m.group.name}</span>
-                  <span className="text-xs text-neutral-500">{fromTermCode(m.group.term)}</span>
-                  <span className="ml-auto text-xs text-neutral-500">
-                    {m.classNumbers.length > 0
-                      ? `${m.classNumbers.length} section${m.classNumbers.length === 1 ? "" : "s"}`
-                      : "no schedule yet"}
-                  </span>
+                  <div className="flex flex-wrap items-baseline gap-2 text-sm">
+                    <span className="font-medium">{m.group.name}</span>
+                    <span className="text-xs text-neutral-500">{fromTermCode(m.group.term)}</span>
+                    <span className="ml-auto text-xs text-neutral-500">
+                      {m.classNumbers.length > 0
+                        ? `you: ${m.classNumbers.length} section${m.classNumbers.length === 1 ? "" : "s"}`
+                        : "you: no schedule yet"}
+                    </span>
+                  </div>
+                  {/* Who else is in it — the fastest way to tell two groups
+                      apart when their names are both three letters long. */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    {m.members.map((p) => (
+                      <span
+                        key={p.id}
+                        className={`flex items-center gap-1.5 ${p.hasSchedule ? "" : "opacity-50"}`}
+                        title={p.hasSchedule ? undefined : "no schedule yet"}
+                      >
+                        {p.image ? (
+                          <Image src={p.image} alt="" width={16} height={16} className="rounded-full" />
+                        ) : (
+                          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: p.color }} />
+                        )}
+                        <span style={{ color: p.color }}>{p.displayName}</span>
+                      </span>
+                    ))}
+                  </div>
                 </Link>
               </li>
             ))}

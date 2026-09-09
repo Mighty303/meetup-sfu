@@ -309,6 +309,14 @@ export interface Membership {
   color: string;
   classNumbers: string[];
   group: Group;
+  /** Everyone in that group, you included — enough to recognise it at a glance. */
+  members: {
+    id: number;
+    displayName: string;
+    color: string;
+    image: string | null;
+    hasSchedule: boolean;
+  }[];
 }
 
 /**
@@ -329,11 +337,33 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
     GROUP BY m.id, g.id
     ORDER BY g.created_at DESC
   `;
+  if (rows.length === 0) return [];
+
+  // One round trip for every group's roster, rather than one per group.
+  const groupIds = rows.map((r) => r.group_id as number);
+  const roster = await sql`
+    SELECT m.group_id, m.id, m.display_name, m.color, u.image,
+           EXISTS (SELECT 1 FROM meetup.member_courses mc WHERE mc.member_id = m.id) AS has_schedule
+    FROM meetup.members m
+    LEFT JOIN meetup.users u ON u.id = m.user_id
+    WHERE m.group_id = ANY(${groupIds}::int[])
+    ORDER BY m.id
+  `;
+
   return rows.map((r) => ({
     memberId: r.member_id,
     displayName: r.display_name,
     color: r.color,
     classNumbers: r.class_numbers as string[],
     group: { id: r.group_id, code: r.code, name: r.name, term: r.term },
+    members: roster
+      .filter((x) => x.group_id === r.group_id)
+      .map((x) => ({
+        id: x.id,
+        displayName: x.display_name,
+        color: x.color,
+        image: x.image ?? null,
+        hasSchedule: x.has_schedule,
+      })),
   }));
 }
