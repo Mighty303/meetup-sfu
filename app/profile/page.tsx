@@ -3,7 +3,8 @@
 import { signIn, useSession } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { AuthButton } from "@/components/AuthButton";
 import { fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
 
@@ -18,6 +19,23 @@ interface Membership {
 interface Me {
   user: { id: number; email: string; name: string | null; image: string | null };
   memberships: Membership[];
+}
+
+/**
+ * Back to the schedule you came from. The Profile button carries the group
+ * code in `?from=`; without it — a bookmark, a fresh tab — fall back to the
+ * group whose row was touched last, and only then to the home page.
+ */
+function BackLink({ fallbackCode }: { fallbackCode: string | null }) {
+  const code = useSearchParams().get("from") ?? fallbackCode;
+  return (
+    <Link
+      href={code ? `/g/${code}` : "/"}
+      className="text-sm text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+    >
+      {code ? "← Back to the schedule" : "← Back home"}
+    </Link>
+  );
 }
 
 export default function ProfilePage() {
@@ -161,9 +179,9 @@ export default function ProfilePage() {
             Sign in
           </button>
         </div>
-        <Link href="/" className="text-sm text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
-          ← Back home
-        </Link>
+        <Suspense fallback={null}>
+          <BackLink fallbackCode={null} />
+        </Suspense>
       </main>
     );
   }
@@ -173,9 +191,9 @@ export default function ProfilePage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
-          <Link href="/" className="text-sm text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
-            ← Back home
-          </Link>
+          <Suspense fallback={null}>
+            <BackLink fallbackCode={data?.memberships[0]?.group.code ?? null} />
+          </Suspense>
         </div>
         <AuthButton />
       </header>

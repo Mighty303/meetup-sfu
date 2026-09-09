@@ -8,6 +8,9 @@ import { usePathname } from "next/navigation";
 export function AuthButton() {
   const { data: session, status } = useSession();
   const pathname = usePathname();
+  // Carry the group you're looking at into the profile, so its back link can
+  // return you to that schedule rather than to the home page.
+  const fromGroup = pathname.startsWith("/g/") ? pathname.split("/")[2] : null;
 
   if (status === "loading") {
     return <div className="h-8 w-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />;
@@ -43,7 +46,7 @@ export function AuthButton() {
           page you're already looking at. */}
       {pathname !== "/profile" && (
         <Link
-          href="/profile"
+          href={fromGroup ? `/profile?from=${encodeURIComponent(fromGroup)}` : "/profile"}
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
         >
           <PersonMark />
