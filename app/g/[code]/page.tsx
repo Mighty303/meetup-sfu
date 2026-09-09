@@ -578,25 +578,6 @@ function GroupSchedule({ code }: { code: string }) {
       )}
 
       <div className="flex flex-wrap items-center justify-center gap-2">
-        {me && (
-          <div className="mr-2 flex rounded-lg border border-neutral-300 p-0.5 dark:border-neutral-700">
-            {(["everyone", "mine"] as const).map((v) => (
-              <Link
-                key={v}
-                href={v === "mine" ? `/g/${code}?view=mine` : `/g/${code}`}
-                scroll={false}
-                aria-current={view === v ? "page" : undefined}
-                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
-                  view === v
-                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                    : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                }`}
-              >
-                {v === "everyone" ? "Everyone" : "My Schedule"}
-              </Link>
-            ))}
-          </div>
-        )}
         <button
           onClick={() => week && setWeek(addDays(week, -7))}
           disabled={!canPage(-1)}
