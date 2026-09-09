@@ -1,6 +1,9 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+import Image from "next/image";
 import { use, useCallback, useEffect, useState } from "react";
+import { AuthButton } from "@/components/AuthButton";
 import { WeekGrid } from "@/components/WeekGrid";
 import type { BusyBlock, FreeWindow } from "@/lib/overlap";
 import { formatTime, fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
@@ -10,6 +13,8 @@ interface Member {
   displayName: string;
   color: string;
   classNumbers: string[];
+  userId: number | null;
+  image: string | null;
 }
 
 interface GroupState {
@@ -38,14 +43,16 @@ const DAY_END = 22 * 60;
 
 export default function GroupPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  const { data: session, status: authStatus } = useSession();
+
   const [state, setState] = useState<GroupState | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Null until the server tells us which week is actually inside the term.
   const [week, setWeek] = useState<string | null>(null);
   const [minMinutes, setMinMinutes] = useState(60);
-  const [meId, setMeId] = useState<number | null>(null);
-  const [name, setName] = useState("");
   const [link, setLink] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
@@ -70,40 +77,36 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
-  // Which member this browser is, so pasting a link updates the right person.
-  // This can't be a useState initializer: the page server-renders, where
-  // localStorage doesn't exist, and reading it during render would break
-  // hydration. An effect after mount is the correct place for it.
-  useEffect(() => {
-    const saved = localStorage.getItem(`meetup-sfu:${code}`);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (saved) setMeId(Number(saved));
-  }, [code]);
+  // Identity comes from the session — no localStorage, so your schedule follows
+  // you to any device you sign in on.
+  const me = state?.members.find((m) => m.userId === session?.appUserId) ?? null;
+  const signedIn = authStatus === "authenticated";
+  // Rows with no owner: claimable by whoever signs in and says that's them.
+  const unclaimed = state?.members.filter((m) => m.userId === null) ?? [];
 
-  const me = state?.members.find((m) => m.id === meId) ?? null;
-
-  async function join(e: React.FormEvent) {
-    e.preventDefault();
+  async function claim(memberId: number) {
     setSaving(true);
-    const res = await fetch(`/api/groups/${code}/members`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName: name }),
-    });
+    const res = await fetch(`/api/groups/${code}/members/${memberId}/claim`, { method: "POST" });
     setSaving(false);
     if (!res.ok) { setError((await res.json()).error); return; }
-    const member = await res.json();
-    localStorage.setItem(`meetup-sfu:${code}`, String(member.id));
-    setMeId(member.id);
-    setName("");
+    setError(null);
+    load();
+  }
+
+  async function join() {
+    setSaving(true);
+    const res = await fetch(`/api/groups/${code}/members`, { method: "POST" });
+    setSaving(false);
+    if (!res.ok) { setError((await res.json()).error); return; }
+    setError(null);
     load();
   }
 
   async function saveSchedule(e: React.FormEvent) {
     e.preventDefault();
-    if (!meId) return;
+    if (!me) return;
     setSaving(true);
-    const res = await fetch(`/api/groups/${code}/members/${meId}`, {
+    const res = await fetch(`/api/groups/${code}/members/${me.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ input: link }),
@@ -111,9 +114,36 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     setSaving(false);
     if (!res.ok) { setError((await res.json()).error); return; }
     const { classNumbers } = await res.json();
-    if (classNumbers.length === 0) setError("No class numbers found in that — paste the whole sfucourses.com/schedule link.");
-    else setError(null);
+    setError(
+      classNumbers.length === 0
+        ? "No class numbers found in that — paste the whole sfucourses.com/schedule link."
+        : null
+    );
     setLink("");
+    load();
+  }
+
+  async function saveName(e: React.FormEvent) {
+    e.preventDefault();
+    if (!me || !newName.trim()) return;
+    setSaving(true);
+    const res = await fetch(`/api/groups/${code}/members/${me.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: newName }),
+    });
+    setSaving(false);
+    if (!res.ok) { setError((await res.json()).error); return; }
+    setError(null);
+    setRenaming(false);
+    load();
+  }
+
+  async function leave() {
+    if (!me) return;
+    setSaving(true);
+    await fetch(`/api/groups/${code}/members/${me.id}`, { method: "DELETE" });
+    setSaving(false);
     load();
   }
 
@@ -125,75 +155,131 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   }
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
-  const sharedWindows = state.free.filter((w) => w.sharedCampus);
 
   return (
     <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{state.group.name}</h1>
           <p className="text-sm text-neutral-500">
             {fromTermCode(state.group.term)} · code <span className="font-mono">{state.group.code}</span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Always visible: clipboard access is unreliable (it silently never
-              settles when the document isn't focused), and people want to see
-              the link they're sharing anyway. */}
-          <input
-            readOnly
-            value={shareUrl}
-            onFocus={(e) => e.currentTarget.select()}
-            className="w-44 rounded-lg border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-600 sm:w-72 lg:w-96 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
-          />
-          <button
-            onClick={() => {
-              // Optimistic — the promise may never settle, so don't wait on it.
-              setCopyState("copied");
-              setTimeout(() => setCopyState("idle"), 2000);
-              navigator.clipboard?.writeText(shareUrl).catch(() => setCopyState("failed"));
-            }}
-            className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
-          >
-            {copyState === "copied" ? "Copied ✓" : copyState === "failed" ? "Select & copy ↑" : "Copy link"}
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <AuthButton />
+          <div className="flex items-center gap-2">
+            {/* Always visible: clipboard access is unreliable (it silently never
+                settles when the document isn't focused), and people want to see
+                the link they're sharing anyway. */}
+            <input
+              readOnly
+              value={shareUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-44 rounded-lg border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-600 sm:w-72 lg:w-96 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+            />
+            <button
+              onClick={() => {
+                // Optimistic — the promise may never settle, so don't wait on it.
+                setCopyState("copied");
+                setTimeout(() => setCopyState("idle"), 2000);
+                navigator.clipboard?.writeText(shareUrl).catch(() => setCopyState("failed"));
+              }}
+              className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
+            >
+              {copyState === "copied" ? "Copied ✓" : copyState === "failed" ? "Select & copy ↑" : "Copy link"}
+            </button>
+          </div>
         </div>
       </header>
 
-      {!me ? (
-        <form onSubmit={join} className="flex flex-wrap gap-2 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            required
-            className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
-          />
-          <button disabled={saving} className="rounded-lg bg-neutral-900 px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
-            Join
-          </button>
-          <p className="w-full text-xs text-neutral-500">
-            Then paste your schedule from{" "}
-            <a
-              href={scheduleBuilderUrl(state.group.term)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-            >
-              sfucourses.com/schedule
-            </a>
-            .
+      {!signedIn ? (
+        <div className="rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
+          <p className="text-neutral-600 dark:text-neutral-300">
+            Sign in with Google to add your schedule. You can see the group without
+            signing in.
           </p>
-        </form>
+        </div>
+      ) : !me ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+          {unclaimed.length > 0 ? (
+            <>
+              {/* People added before sign-in existed. Claiming keeps their
+                  saved schedule instead of making them start over. */}
+              <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                Already in this group under one of these names? Pick yours to keep
+                your saved schedule.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {unclaimed.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => claim(m.id)}
+                    disabled={saving}
+                    className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                  >
+                    <span style={{ color: m.color }}>{m.displayName}</span>
+                    {m.classNumbers.length > 0 && (
+                      <span className="text-neutral-500"> · {m.classNumbers.length}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-neutral-600 dark:text-neutral-300">
+              You&apos;re not in this group yet.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={join}
+              disabled={saving}
+              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+            >
+              {saving ? "Joining…" : unclaimed.length > 0 ? "None of these — add me" : "Join group"}
+            </button>
+            {error && <p className="text-sm text-amber-600">{error}</p>}
+          </div>
+        </div>
       ) : (
-        <form onSubmit={saveSchedule} className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <label className="text-sm">
-              <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
-              {me.classNumbers.length > 0
-                ? ` — ${me.classNumbers.length} section${me.classNumbers.length === 1 ? "" : "s"} saved. Paste a new link to replace them.`
-                : " — paste your schedule link below"}
-            </label>
+        <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {renaming ? (
+              <form onSubmit={saveName} className="flex flex-wrap items-center gap-2">
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder={me.displayName}
+                  autoFocus
+                  maxLength={60}
+                  className="rounded-lg border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+                <button disabled={saving} className="rounded-lg bg-neutral-900 px-3 py-1 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
+                  Save
+                </button>
+                <button type="button" onClick={() => setRenaming(false)} className="text-sm text-neutral-500">
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                {me.image && (
+                  <Image src={me.image} alt="" width={24} height={24} className="rounded-full" />
+                )}
+                <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
+                <button
+                  onClick={() => { setNewName(me.displayName); setRenaming(true); }}
+                  className="text-xs text-neutral-500 underline-offset-2 hover:underline"
+                >
+                  Rename
+                </button>
+                <span className="text-neutral-500">
+                  {me.classNumbers.length > 0
+                    ? `· ${me.classNumbers.length} section${me.classNumbers.length === 1 ? "" : "s"} saved`
+                    : "· no schedule yet"}
+                </span>
+              </div>
+            )}
             <a
               href={scheduleBuilderUrl(state.group.term)}
               target="_blank"
@@ -203,6 +289,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
               Build it on sfucourses.com ↗
             </a>
           </div>
+
           {me.classNumbers.length === 0 && (
             <ol className="ml-4 list-decimal text-xs text-neutral-500">
               <li>Open the builder, pick your {fromTermCode(state.group.term)} sections</li>
@@ -210,7 +297,8 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
               <li>Paste it here</li>
             </ol>
           )}
-          <div className="flex flex-wrap gap-2">
+
+          <form onSubmit={saveSchedule} className="flex flex-wrap gap-2">
             <input
               value={link}
               onChange={(e) => setLink(e.target.value)}
@@ -218,11 +306,21 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
               className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
             />
             <button disabled={saving} className="rounded-lg bg-neutral-900 px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : me.classNumbers.length > 0 ? "Replace" : "Save"}
+            </button>
+          </form>
+
+          <div className="flex items-center gap-3">
+            {error && <p className="text-sm text-amber-600">{error}</p>}
+            <button
+              onClick={leave}
+              disabled={saving}
+              className="ml-auto text-xs text-neutral-500 underline-offset-2 hover:text-red-600 hover:underline"
+            >
+              Leave group
             </button>
           </div>
-          {error && <p className="text-sm text-amber-600">{error}</p>}
-        </form>
+        </div>
       )}
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -242,8 +340,12 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
         <div className="flex flex-wrap gap-3">
           {state.members.map((m) => (
             <span key={m.id} className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: m.color }} />
-              {m.displayName}
+              {m.image ? (
+                <Image src={m.image} alt="" width={16} height={16} className="rounded-full" />
+              ) : (
+                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: m.color }} />
+              )}
+              <span style={{ color: m.color }}>{m.displayName}</span>
               {m.classNumbers.length === 0 && (
                 <span className="text-neutral-400" title="Not counted in the overlap until they add a schedule">
                   (no schedule yet)
@@ -275,7 +377,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
 
       <section>
         <h2 className="mb-2 font-medium">
-          Everyone free {sharedWindows.length !== state.free.length && "(green = same campus)"}
+          Everyone free {state.free.some((w) => !w.sharedCampus) && "(green = same campus)"}
         </h2>
         {state.free.length === 0 ? (
           <p className="text-sm text-neutral-500">

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AuthButton } from "@/components/AuthButton";
 import { currentTermCode, fromTermCode } from "@/lib/sfu";
 
 const TERMS = (() => {
@@ -42,6 +43,10 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-8 p-6">
+      <div className="flex justify-end">
+        <AuthButton />
+      </div>
+
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">meetup-sfu</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400">

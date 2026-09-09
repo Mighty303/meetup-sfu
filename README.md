@@ -40,6 +40,31 @@ npm run migrate              # creates the `meetup` schema; safe to re-run
 npm run dev
 ```
 
+### Google sign-in
+
+Create a **Web application** OAuth client in the Google Cloud Console with these
+redirect URIs, one per origin you use:
+
+```
+http://localhost:3000/api/auth/callback/google
+https://meetup-sfu.vercel.app/api/auth/callback/google
+```
+
+Then, to write the credentials to `.env.local` and all three Vercel
+environments without them appearing on screen:
+
+```bash
+./scripts/set-google-oauth.sh
+```
+
+Sign-in is required to join a group or edit a schedule; anyone with the invite
+link can still view one. A member row is owned by the user who created it, so
+only they can change their schedule or name.
+
+Members added before sign-in existed have no owner. They stay editable by
+anyone with the link, and a signed-in user can **claim** one to take it over
+along with its saved schedule, rather than starting a duplicate row.
+
 ## Scripts
 
 | command | does |
@@ -47,6 +72,8 @@ npm run dev
 | `npm run migrate` | applies `db/migrations/*.sql` in order (idempotent) |
 | `npm run inspect` | prints row counts and term-cache status |
 | `node scripts/reset-demo.mjs` | deletes smoke-test groups |
+| `node scripts/check-authz.mjs` | verifies the ownership and claim rules against the database |
+| `./scripts/set-google-oauth.sh` | writes Google OAuth credentials locally and to Vercel |
 
 ## Schema
 
@@ -55,11 +82,11 @@ another app without collisions. `meetup.sections_cache` holds one term dump
 (~227 kB for Fall 2025) with a 24h TTL, so every member of every group shares a
 single upstream fetch.
 
-## v0 scope
+## Scope
 
-No auth — a group is a secret invite code, and this browser remembers which
-member you are via `localStorage`. Fine for a friend group; add real auth before
-this is public.
+A group is still a secret invite code — anyone with the link can view it. What
+sign-in adds is ownership: your schedule and name are yours to edit, and your
+identity follows you across devices instead of living in `localStorage`.
 
 Not built yet: custom busy blocks (the `meetup.member_blocks` table exists and is
 read, but there's no UI to add them), calendar export, meeting-spot suggestions.

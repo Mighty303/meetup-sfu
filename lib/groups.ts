@@ -37,6 +37,9 @@ export interface Member {
   displayName: string;
   color: string;
   classNumbers: string[];
+  /** Null for members created before sign-in existed. */
+  userId: number | null;
+  image: string | null;
 }
 
 export interface GroupState {
@@ -77,7 +80,8 @@ export async function findGroup(code: string): Promise<Group | null> {
 
 export async function addMember(
   groupId: number,
-  displayName: string
+  displayName: string,
+  userId: number
 ): Promise<Member> {
   const sql = getDb();
   const existing = await sql`
@@ -85,16 +89,83 @@ export async function addMember(
   `;
   const color = MEMBER_COLORS[existing[0].n % MEMBER_COLORS.length];
   const rows = await sql`
-    INSERT INTO meetup.members (group_id, display_name, color)
-    VALUES (${groupId}, ${displayName}, ${color})
-    RETURNING id, display_name, color
+    INSERT INTO meetup.members (group_id, display_name, color, user_id)
+    VALUES (${groupId}, ${displayName}, ${color}, ${userId})
+    RETURNING id, display_name, color, user_id
   `;
+  const user = await sql`SELECT image FROM meetup.users WHERE id = ${userId}`;
   return {
     id: rows[0].id,
     displayName: rows[0].display_name,
     color: rows[0].color,
     classNumbers: [],
+    userId: rows[0].user_id,
+    image: user[0]?.image ?? null,
   };
+}
+
+export async function findMemberForUser(
+  groupId: number,
+  userId: number
+): Promise<number | null> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT id FROM meetup.members WHERE group_id = ${groupId} AND user_id = ${userId}
+  `;
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Attach a signed-in user to a member row that predates sign-in, so the people
+ * already in a group keep their saved schedule instead of starting over.
+ * Only ownerless rows can be claimed, and only if the user has no row here yet.
+ */
+export async function claimMember(
+  memberId: number,
+  groupId: number,
+  userId: number
+): Promise<"ok" | "not-claimable" | "already-member"> {
+  const sql = getDb();
+
+  const existing = await findMemberForUser(groupId, userId);
+  if (existing !== null) return "already-member";
+
+  const rows = await sql`
+    UPDATE meetup.members
+    SET user_id = ${userId}
+    WHERE id = ${memberId} AND group_id = ${groupId} AND user_id IS NULL
+    RETURNING id
+  `;
+  return rows.length > 0 ? "ok" : "not-claimable";
+}
+
+export async function renameMember(
+  memberId: number,
+  displayName: string
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE meetup.members SET display_name = ${displayName} WHERE id = ${memberId}
+  `;
+}
+
+/**
+ * A member row owned by a signed-in user may only be edited by that user.
+ * Rows predating sign-in have no owner and stay editable by anyone holding the
+ * invite code, which is how they were created in the first place.
+ */
+export async function canEditMember(
+  memberId: number,
+  groupId: number,
+  appUserId: number | null
+): Promise<boolean> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT user_id FROM meetup.members WHERE id = ${memberId} AND group_id = ${groupId}
+  `;
+  if (rows.length === 0) return false;
+  const owner = rows[0].user_id as number | null;
+  return owner === null || owner === appUserId;
 }
 
 export async function setMemberCourses(
@@ -142,12 +213,13 @@ export async function getGroupState(
 ): Promise<GroupState> {
   const sql = getDb();
   const rows = await sql`
-    SELECT m.id, m.display_name, m.color,
+    SELECT m.id, m.display_name, m.color, m.user_id, u.image,
            COALESCE(ARRAY_AGG(mc.class_number) FILTER (WHERE mc.class_number IS NOT NULL), '{}') AS class_numbers
     FROM meetup.members m
     LEFT JOIN meetup.member_courses mc ON mc.member_id = m.id
+    LEFT JOIN meetup.users u ON u.id = m.user_id
     WHERE m.group_id = ${group.id}
-    GROUP BY m.id, m.display_name, m.color
+    GROUP BY m.id, m.display_name, m.color, m.user_id, u.image
     ORDER BY m.id
   `;
 
@@ -156,6 +228,8 @@ export async function getGroupState(
     displayName: r.display_name,
     color: r.color,
     classNumbers: r.class_numbers as string[],
+    userId: r.user_id ?? null,
+    image: r.image ?? null,
   }));
 
   const blocks = await sql`
