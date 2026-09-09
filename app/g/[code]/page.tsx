@@ -448,38 +448,6 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 text-sm">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => week && setWeek(addDays(week, -7))}
-            disabled={!canPage(-1)}
-            aria-label="Previous week"
-            className="rounded-lg border border-neutral-300 px-2 py-1 leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
-          >
-            ←
-          </button>
-          <span className="min-w-[9.5rem] text-center tabular-nums">
-            {week ? `${shortDate(week)} – ${shortDate(addDays(week, 4))}` : "—"}
-          </span>
-          <button
-            onClick={() => week && setWeek(addDays(week, 7))}
-            disabled={!canPage(1)}
-            aria-label="Next week"
-            className="rounded-lg border border-neutral-300 px-2 py-1 leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
-          >
-            →
-          </button>
-          {week !== thisMonday && weekInTerm(thisMonday) && (
-            <button
-              onClick={() => setWeek(thisMonday)}
-              className="ml-1 rounded-lg border border-neutral-300 px-2 py-1 text-xs transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-            >
-              This week
-            </button>
-          )}
-        </div>
-      </div>
-
       <section>
         <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="font-medium">Who&apos;s in</h2>
@@ -574,6 +542,36 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
           the first week of term.
         </p>
       )}
+
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={() => week && setWeek(addDays(week, -7))}
+          disabled={!canPage(-1)}
+          aria-label="Previous week"
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-lg leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        >
+          ←
+        </button>
+        <span className="min-w-[12rem] text-center text-lg font-medium tabular-nums">
+          {week ? `${shortDate(week)} – ${shortDate(addDays(week, 4))}` : "—"}
+        </span>
+        <button
+          onClick={() => week && setWeek(addDays(week, 7))}
+          disabled={!canPage(1)}
+          aria-label="Next week"
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-lg leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        >
+          →
+        </button>
+        {week !== thisMonday && weekInTerm(thisMonday) && (
+          <button
+            onClick={() => setWeek(thisMonday)}
+            className="ml-1 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            This week
+          </button>
+        )}
+      </div>
 
       <WeekGrid
         members={shown}
