@@ -11,6 +11,8 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     appUserId?: number;
+    /** The picture they chose, if any. Null once they've reverted to Google's. */
+    avatar?: string | null;
   }
 }
 

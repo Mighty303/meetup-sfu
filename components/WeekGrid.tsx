@@ -22,7 +22,7 @@ const COLUMN_HEIGHT = "h-[520px] sm:h-[660px] lg:h-[780px] xl:h-[880px]";
  * after the last one is real, but it competes with going home, so it's dimmed
  * rather than coloured. Within the gaps, campus still decides green vs amber.
  */
-function freeStyle(w: FreeWindow) {
+function freeStyle(w: FreeWindow, solo: boolean) {
   if (!w.betweenClasses) {
     return {
       box: "bg-neutral-400/10 ring-1 ring-inset ring-neutral-400/30 dark:bg-neutral-400/10",
@@ -38,14 +38,16 @@ function freeStyle(w: FreeWindow) {
         strong: "text-emerald-800 dark:text-emerald-200",
         soft: "text-emerald-800/80 dark:text-emerald-200/80",
         accent: "#10b981",
-        tag: "GAP · ALL FREE",
+        // "ALL FREE" is about the group; with one schedule on screen there
+        // is no group, just a gap in your own day.
+        tag: solo ? "GAP" : "GAP · ALL FREE",
       }
     : {
         box: "bg-amber-300/25 ring-2 ring-inset ring-amber-500/50",
         strong: "text-amber-800 dark:text-amber-200",
         soft: "text-amber-800/80 dark:text-amber-200/80",
         accent: "#f59e0b",
-        tag: "GAP · SPLIT",
+        tag: solo ? "GAP" : "GAP · SPLIT",
       };
 }
 
@@ -84,9 +86,11 @@ interface Props {
   free: FreeWindow[];
   dayStart: number;
   dayEnd: number;
+  /** One person's week: labels drop the group framing. */
+  solo?: boolean;
 }
 
-export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Props) {
+export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo = false }: Props) {
   // Tracked in state rather than a CSS-only tooltip: the day columns clip their
   // overflow, so an in-flow tooltip would be cut off at the column edge. A
   // fixed-position card follows the cursor and escapes the clipping entirely.
@@ -158,7 +162,7 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd }: Prop
                       colour; the rest stay grey. */}
                   {dayFree.map((w, i) => {
                     const minutes = w.end - w.start;
-                    const tone = freeStyle(w);
+                    const tone = freeStyle(w, solo);
                     return (
                       <div
                         key={`free-${i}`}

@@ -150,3 +150,113 @@ export function scheduleBuilderUrl(termCode: string): string {
   const param = short[season] ? `${short[season]}${year.slice(-2)}` : "";
   return `https://sfucourses.com/schedule${param ? `?term=${param}` : ""}`;
 }
+
+/**
+ * A section trimmed to what a picker needs to show. The full term dump is
+ * ~1.5 MB; this is what actually crosses the wire.
+ */
+export interface SectionHit {
+  classNumber: string;
+  section: string; // D100
+  deliveryMethod: string;
+  instructor: string;
+  meetings: {
+    days: string; // "Mo, We" — empty for async
+    startTime: string;
+    endTime: string;
+    campus: string;
+    sectionCode: string; // LEC, LAB, TUT, ...
+  }[];
+}
+
+export interface CourseHit {
+  dept: string;
+  number: string;
+  title: string;
+  units: string;
+  sections: SectionHit[];
+}
+
+function slimCourse(course: CourseWithSections, sections: SectionDetail[]): CourseHit {
+  return {
+    dept: course.dept,
+    number: course.number,
+    title: course.title,
+    units: course.units,
+    sections: sections.map((s) => ({
+      classNumber: s.classNumber,
+      section: s.section,
+      deliveryMethod: s.deliveryMethod,
+      instructor: s.instructors[0]?.name.trim() ?? "",
+      meetings: s.schedules.map((sc) => ({
+        days: sc.days,
+        startTime: sc.startTime,
+        endTime: sc.endTime,
+        campus: sc.campus,
+        sectionCode: sc.sectionCode,
+      })),
+    })),
+  };
+}
+
+/** "cmpt 225", "CMPT225", "225", "data structures" all have to work. */
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Course search over a term dump. Matches on the course code first — that's
+ * what people type — and falls back to the title so "calculus" finds MATH 151.
+ * Sorted so a code match outranks a title match, then by dept and number.
+ */
+export function searchCourses(
+  courses: CourseWithSections[],
+  query: string,
+  limit = 20
+): CourseHit[] {
+  const q = normalize(query);
+  if (q.length < 2) return [];
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+
+  const scored: { course: CourseWithSections; score: number }[] = [];
+  for (const course of courses) {
+    const code = normalize(`${course.dept}${course.number}`);
+    const title = course.title.toLowerCase();
+
+    let score: number;
+    if (code === q) score = 0;
+    else if (code.startsWith(q)) score = 1;
+    else if (code.includes(q)) score = 2;
+    else if (words.every((w) => title.includes(w))) score = 3;
+    else continue;
+
+    scored.push({ course, score });
+  }
+
+  scored.sort(
+    (a, b) =>
+      a.score - b.score ||
+      a.course.dept.localeCompare(b.course.dept) ||
+      a.course.number.localeCompare(b.course.number, undefined, { numeric: true })
+  );
+
+  return scored.slice(0, limit).map(({ course }) => slimCourse(course, course.sections));
+}
+
+/**
+ * Look up saved class numbers so they can be shown as "CMPT 225 D100" rather
+ * than a bare id. Unknown numbers are skipped — they're usually a section saved
+ * under a different term, which the group page already flags.
+ */
+export function coursesByClassNumbers(
+  courses: CourseWithSections[],
+  classNumbers: string[]
+): CourseHit[] {
+  const wanted = new Set(classNumbers);
+  const hits: CourseHit[] = [];
+  for (const course of courses) {
+    const matched = course.sections.filter((s) => wanted.has(s.classNumber));
+    if (matched.length > 0) hits.push(slimCourse(course, matched));
+  }
+  return hits;
+}

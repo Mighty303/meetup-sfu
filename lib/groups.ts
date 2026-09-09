@@ -19,6 +19,11 @@ export const MEMBER_COLORS = [
   "#06b6d4", "#3b82f6", "#a855f7", "#ec4899",
 ];
 
+/** Guards the column: the grid puts white text on these, so it's palette-only. */
+export function isMemberColor(value: unknown): value is string {
+  return typeof value === "string" && (MEMBER_COLORS as readonly string[]).includes(value);
+}
+
 // Ambiguous characters (0/O, 1/I) left out — these codes get read aloud and retyped.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -153,6 +158,14 @@ export async function renameMember(
   `;
 }
 
+/** Colour is per group, so the same person can dodge a clash in each one. */
+export async function setMemberColor(memberId: number, color: string): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE meetup.members SET color = ${color} WHERE id = ${memberId}
+  `;
+}
+
 /**
  * A member row owned by a signed-in user may only be edited by that user.
  * Rows predating sign-in have no owner and stay editable by anyone holding the
@@ -217,13 +230,14 @@ export async function getGroupState(
 ): Promise<GroupState> {
   const sql = getDb();
   const rows = await sql`
-    SELECT m.id, m.display_name, m.color, m.user_id, u.image,
+    SELECT m.id, m.display_name, m.color, m.user_id,
+           COALESCE(u.avatar, u.image) AS image,
            COALESCE(ARRAY_AGG(mc.class_number) FILTER (WHERE mc.class_number IS NOT NULL), '{}') AS class_numbers
     FROM meetup.members m
     LEFT JOIN meetup.member_courses mc ON mc.member_id = m.id
     LEFT JOIN meetup.users u ON u.id = m.user_id
     WHERE m.group_id = ${group.id}
-    GROUP BY m.id, m.display_name, m.color, m.user_id, u.image
+    GROUP BY m.id, m.display_name, m.color, m.user_id, u.avatar, u.image
     ORDER BY m.id
   `;
 
@@ -342,7 +356,8 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
   // One round trip for every group's roster, rather than one per group.
   const groupIds = rows.map((r) => r.group_id as number);
   const roster = await sql`
-    SELECT m.group_id, m.id, m.display_name, m.color, u.image,
+    SELECT m.group_id, m.id, m.display_name, m.color,
+           COALESCE(u.avatar, u.image) AS image,
            EXISTS (SELECT 1 FROM meetup.member_courses mc WHERE mc.member_id = m.id) AS has_schedule
     FROM meetup.members m
     LEFT JOIN meetup.users u ON u.id = m.user_id
@@ -366,4 +381,37 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
         hasSchedule: x.has_schedule,
       })),
   }));
+}
+
+/** Add one section to a member's schedule. Adding it twice is a no-op. */
+export async function addMemberCourse(
+  memberId: number,
+  classNumber: string
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    INSERT INTO meetup.member_courses (member_id, class_number)
+    VALUES (${memberId}, ${classNumber})
+    ON CONFLICT DO NOTHING
+  `;
+}
+
+export async function removeMemberCourse(
+  memberId: number,
+  classNumber: string
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    DELETE FROM meetup.member_courses
+    WHERE member_id = ${memberId} AND class_number = ${classNumber}
+  `;
+}
+
+export async function getMemberCourses(memberId: number): Promise<string[]> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT class_number FROM meetup.member_courses WHERE member_id = ${memberId}
+    ORDER BY class_number
+  `;
+  return rows.map((r) => r.class_number as string);
 }

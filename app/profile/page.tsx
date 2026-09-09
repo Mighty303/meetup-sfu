@@ -1,10 +1,13 @@
 "use client";
 
 import { signIn, useSession } from "next-auth/react";
-import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { Avatar } from "@/components/Avatar";
+import { ColorPicker } from "@/components/ColorPicker";
+import { fileToAvatar } from "@/lib/avatar-file";
+import { CoursePicker } from "@/components/CoursePicker";
 import { fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
 
 interface Membership {
@@ -13,10 +16,20 @@ interface Membership {
   color: string;
   classNumbers: string[];
   group: { id: number; code: string; name: string; term: string };
+  /** The whole roster, so the colour picker knows what's already spoken for. */
+  members: { id: number; displayName: string; color: string }[];
 }
 
 interface Me {
-  user: { id: number; email: string; name: string | null; image: string | null };
+  user: {
+    id: number;
+    email: string;
+    name: string | null;
+    /** Google's picture. */
+    image: string | null;
+    /** Theirs, if they've set one. */
+    avatar: string | null;
+  };
   memberships: Membership[];
 }
 
@@ -38,7 +51,9 @@ function BackLink({ fallbackCode }: { fallbackCode: string | null }) {
 }
 
 export default function ProfilePage() {
-  const { status: authStatus } = useSession();
+  // `update()` re-runs the JWT callback, which is how the picture in the header
+  // catches up without a sign-out.
+  const { status: authStatus, update: refreshSession } = useSession();
 
   const [data, setData] = useState<Me | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,6 +64,8 @@ export default function ProfilePage() {
   const [links, setLinks] = useState<Record<number, string>>({});
   const [confirmLeave, setConfirmLeave] = useState<number | null>(null);
   const [everywhereName, setEverywhereName] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/me");
@@ -70,6 +87,73 @@ export default function ProfilePage() {
       else delete next[memberId];
       return next;
     });
+  }
+
+  /** Store the picture, or null to go back to Google's. */
+  async function saveAvatar(avatar: string | null) {
+    setAvatarBusy(true);
+    setAvatarError(null);
+    const res = await fetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ avatar }),
+    });
+    setAvatarBusy(false);
+    if (!res.ok) {
+      setAvatarError((await res.json().catch(() => ({}))).error ?? "could not save that picture");
+      return;
+    }
+    setNotice(avatar ? "Picture updated." : "Back to your Google picture.");
+    // The argument matters: `update()` with nothing passed only re-reads the
+    // session, while any value makes it POST, which is what re-runs the JWT
+    // callback and pulls the new picture onto the token.
+    await refreshSession({});
+    load();
+  }
+
+  async function pickPicture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Cleared straight away so re-picking the same file after an error still fires.
+    e.target.value = "";
+    if (!file) return;
+    setAvatarBusy(true);
+    setAvatarError(null);
+    let dataUrl: string;
+    try {
+      dataUrl = await fileToAvatar(file);
+    } catch (err) {
+      setAvatarBusy(false);
+      setAvatarError(err instanceof Error ? err.message : "could not read that image");
+      return;
+    }
+    await saveAvatar(dataUrl);
+  }
+
+  async function saveColor(m: Membership, color: string) {
+    if (color === m.color) return;
+    setSaving(true);
+    const res = await fetch(`/api/groups/${m.group.code}/members/${m.memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      setError(m.memberId, (await res.json().catch(() => ({}))).error ?? "could not save that colour");
+      return;
+    }
+    setError(m.memberId, null);
+    setNotice(`New colour in ${m.group.name}.`);
+    load();
+  }
+
+  /** Colours the rest of that group already hold, by owner. */
+  function takenIn(m: Membership): Record<string, string> {
+    return Object.fromEntries(
+      (m.members ?? [])
+        .filter((x) => x.id !== m.memberId)
+        .map((x) => [x.color, x.displayName])
+    );
   }
 
   /** PATCH one member row. Returns the error message, or null on success. */
@@ -200,18 +284,51 @@ export default function ProfilePage() {
         <p className="text-neutral-500">Loading…</p>
       ) : (
         <>
-          <section className="flex items-center gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-            {data.user.image && (
-              <Image src={data.user.image} alt="" width={48} height={48} className="rounded-full" />
-            )}
-            <div className="min-w-0">
+          <section className="flex flex-wrap items-center gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+            <Avatar
+              src={data.user.avatar ?? data.user.image}
+              name={data.user.name ?? data.user.email}
+              size={56}
+            />
+            <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{data.user.name ?? data.user.email}</p>
               <p className="truncate text-sm text-neutral-500">{data.user.email}</p>
-              {/* Both come straight from Google on every sign-in, so editing
-                  them here would be undone the next time you signed in. */}
-              <p className="mt-1 text-xs text-neutral-500">
-                Name and picture come from your Google account. The names below are
-                what your groups see, and those you can change.
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {/* A label, not a button: the file input has to be the thing
+                    clicked for the picker to open. */}
+                <label
+                  className={`rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors dark:border-neutral-700 ${
+                    avatarBusy
+                      ? "cursor-not-allowed opacity-50"
+                      : "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={avatarBusy}
+                    onChange={pickPicture}
+                    className="sr-only"
+                  />
+                  {avatarBusy ? "Saving…" : data.user.avatar ? "Change picture" : "Upload a picture"}
+                </label>
+                {data.user.avatar && (
+                  <button
+                    onClick={() => saveAvatar(null)}
+                    disabled={avatarBusy}
+                    className="text-sm text-neutral-500 underline-offset-2 hover:underline disabled:opacity-50"
+                  >
+                    Use my Google picture
+                  </button>
+                )}
+              </div>
+              {avatarError && <p className="mt-1 text-xs text-amber-600">{avatarError}</p>}
+              {/* The name still comes from Google on every sign-in, so editing
+                  it here would be undone the next time you signed in. */}
+              <p className="mt-2 text-xs text-neutral-500">
+                Your picture is cropped square and shrunk to 128px before it&apos;s
+                saved. Your name comes from Google — the per-group names below are
+                the ones you can change.
               </p>
             </div>
           </section>
@@ -283,6 +400,16 @@ export default function ProfilePage() {
                     </span>
                   </div>
 
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-xs text-neutral-500">Your colour here</span>
+                    <ColorPicker
+                      value={m.color}
+                      taken={takenIn(m)}
+                      disabled={saving}
+                      onPick={(color) => saveColor(m, color)}
+                    />
+                  </div>
+
                   <form onSubmit={(e) => saveName(m, e)} className="flex flex-wrap items-end gap-2">
                     <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-500">
                       Name in this group
@@ -301,9 +428,17 @@ export default function ProfilePage() {
                     </button>
                   </form>
 
+                  <CoursePicker
+                    term={m.group.term}
+                    groupCode={m.group.code}
+                    memberId={m.memberId}
+                    classNumbers={m.classNumbers}
+                    onChange={load}
+                  />
+
                   <form onSubmit={(e) => saveSchedule(m, e)} className="flex flex-wrap items-end gap-2">
                     <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-500">
-                      Schedule link
+                      Or paste a schedule link (replaces everything above)
                       <input
                         value={links[m.memberId] ?? ""}
                         onChange={(e) => setLinks((cur) => ({ ...cur, [m.memberId]: e.target.value }))}

@@ -3,6 +3,9 @@
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { Avatar } from "@/components/Avatar";
+import { ColorPicker } from "@/components/ColorPicker";
+import { CoursePicker } from "@/components/CoursePicker";
 import { WeekGrid } from "@/components/WeekGrid";
 import { commonFree, partialFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
@@ -85,6 +88,9 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   // Member ids ticked off in the list. Kept as ids, not indices, so it survives
   // someone joining or leaving mid-session.
   const [hidden, setHidden] = useState<Set<number>>(new Set());
+  // "mine" narrows the whole page to your own row: your classes at full width
+  // and your own gaps, without everyone else's blocks to read past.
+  const [view, setView] = useState<"everyone" | "mine">("everyone");
   const [showAllPartial, setShowAllPartial] = useState(false);
   const [link, setLink] = useState("");
   const [renaming, setRenaming] = useState(false);
@@ -159,6 +165,20 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
     load();
   }
 
+  async function saveColor(color: string) {
+    if (!me || color === me.color) return;
+    setSaving(true);
+    const res = await fetch(`/api/groups/${code}/members/${me.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color }),
+    });
+    setSaving(false);
+    if (!res.ok) { setError((await res.json()).error); return; }
+    setError(null);
+    load();
+  }
+
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
     if (!me || !newName.trim()) return;
@@ -192,7 +212,13 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
       ),
     [state]
   );
-  const shown = useMemo(() => scheduled.filter((m) => !hidden.has(m.id)), [scheduled, hidden]);
+  const shown = useMemo(
+    () =>
+      view === "mine"
+        ? scheduled.filter((m) => m.userId === session?.appUserId)
+        : scheduled.filter((m) => !hidden.has(m.id)),
+    [scheduled, hidden, view, session?.appUserId]
+  );
 
   const schedules = useMemo(
     () => shown.map((m) => ({ name: m.displayName, busy: state?.busyByMember[m.id] ?? [] })),
@@ -204,16 +230,17 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
   // reload — the server's own `free` is for API callers, not for this view.
   const free = useMemo(
     () =>
-      schedules.length >= 2
+      schedules.length >= (view === "mine" ? 1 : 2)
         ? commonFree({ members: schedules, dayStart: DAY_START, dayEnd: DAY_END, minMinutes: MIN_MINUTES })
         : [],
-    [schedules]
+    [schedules, view]
   );
 
   // Windows where only part of the group can make it. Two people already on
   // campus is a real meetup, so those sort to the top; the full-group ones are
   // dropped because they're listed on their own above.
   const partial = useMemo(() => {
+    if (view === "mine") return [];
     if (schedules.length < 3) return []; // with two, "some of you" is the same list
     return partialFree({
       members: schedules,
@@ -229,7 +256,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
           dayOrder(a.day) - dayOrder(b.day) ||
           a.start - b.start
       );
-  }, [schedules]);
+  }, [schedules, view]);
 
   if (error && !state) {
     return <main className="mx-auto w-full max-w-lg p-6"><p className="text-red-600">{error}</p></main>;
@@ -386,9 +413,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
               </form>
             ) : (
               <div className="flex items-center gap-2 text-sm">
-                {me.image && (
-                  <Image src={me.image} alt="" width={24} height={24} className="rounded-full" />
-                )}
+                <Avatar src={me.image} name={me.displayName} color={me.color} size={24} />
                 <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
                 <button
                   onClick={() => { setNewName(me.displayName); setRenaming(true); }}
@@ -413,25 +438,50 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
             </a>
           </div>
 
-          {me.classNumbers.length === 0 && (
-            <ol className="ml-4 list-decimal text-xs text-neutral-500">
-              <li>Open the builder, pick your {fromTermCode(state.group.term)} sections</li>
-              <li>Copy the URL from your browser&apos;s address bar</li>
-              <li>Paste it here</li>
-            </ol>
-          )}
+          {/* Right next to the grid it applies to — the whole point of changing
+              it is that your blocks are hard to pick out, and you can see that
+              happen here. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-xs text-neutral-500">Your colour</span>
+            <ColorPicker
+              value={me.color}
+              taken={Object.fromEntries(
+                state.members
+                  .filter((m) => m.id !== me.id)
+                  .map((m) => [m.color, m.displayName])
+              )}
+              disabled={saving}
+              onPick={saveColor}
+            />
+          </div>
 
-          <form onSubmit={saveSchedule} className="flex flex-wrap gap-2">
+          {/* Search the term's course list directly — no round trip through
+              the builder for people who just want to add one class. */}
+          <CoursePicker
+            term={state.group.term}
+            groupCode={code}
+            memberId={me.id}
+            classNumbers={me.classNumbers}
+            onChange={load}
+          />
+
+          <details className="text-xs text-neutral-500">
+            <summary className="cursor-pointer select-none underline-offset-2 hover:underline">
+              Built it on sfucourses.com already? Paste the link
+            </summary>
+            <form onSubmit={saveSchedule} className="mt-2 flex flex-wrap gap-2">
             <input
               value={link}
               onChange={(e) => setLink(e.target.value)}
               placeholder="https://sfucourses.com/schedule?courses=5446-5447"
               className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
             />
-            <button disabled={saving} className="rounded-lg bg-neutral-900 px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
-              {saving ? "Saving…" : me.classNumbers.length > 0 ? "Replace" : "Save"}
+            <button disabled={saving} className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
+              {saving ? "Saving…" : me.classNumbers.length > 0 ? "Replace all" : "Save"}
             </button>
-          </form>
+            </form>
+            <p className="mt-1">Pasting a link replaces everything you have saved here.</p>
+          </details>
 
           <div className="flex items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
@@ -446,6 +496,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
         </div>
       )}
 
+      {view === "everyone" && (
       <section>
         <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="font-medium">Who&apos;s in</h2>
@@ -533,6 +584,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
           </p>
         )}
       </section>
+      )}
 
       {!weekInTerm(thisMonday) && (
         <p className="-mt-3 text-xs text-neutral-500">
@@ -541,7 +593,25 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
         </p>
       )}
 
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {me && (
+          <div className="mr-2 flex rounded-lg border border-neutral-300 p-0.5 dark:border-neutral-700">
+            {(["everyone", "mine"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                  view === v
+                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+                    : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                }`}
+              >
+                {v === "everyone" ? "Everyone" : "Just me"}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           onClick={() => week && setWeek(addDays(week, -7))}
           disabled={!canPage(-1)}
@@ -577,18 +647,19 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
         free={free}
         dayStart={DAY_START}
         dayEnd={DAY_END}
+        solo={view === "mine"}
       />
 
       <section>
-        <h2 className="mb-1 font-medium">Gaps between classes</h2>
+        <h2 className="mb-1 font-medium">{view === "mine" ? "Your gaps between classes" : "Gaps between classes"}</h2>
         <p className="mb-2 text-xs text-neutral-500">
-          Windows with a class on both sides, for everyone ticked on above. Names
-          are the people who have class that day, so they&apos;re on campus
-          already — anyone else would be making the trip specially.
+          {view === "mine"
+            ? "Windows with a class on both sides — you're already on campus and have to stay."
+            : "Windows with a class on both sides, for everyone ticked on above. Names are the people who have class that day, so they're on campus already — anyone else would be making the trip specially."}
         </p>
         {gaps.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            No hour-long gap this week for everyone ticked on
+            {view === "mine" ? "No hour-long gap between your classes this week" : "No hour-long gap this week for everyone ticked on"}
             {partial.length > 0
               ? " — tick someone off, or take one of the part-group windows below"
               : otherFree.length > 0 && " — or use one of the open windows below"}
@@ -619,7 +690,9 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
                 <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-300">
                   {w.onCampus.length === 0
                     ? "nobody has class this day — someone has to travel"
-                    : `on campus: ${w.onCampus.join(", ")}`}
+                    : view === "mine"
+                      ? "you're on campus either side"
+                      : `on campus: ${w.onCampus.join(", ")}`}
                 </div>
               </li>
             ))}
@@ -629,10 +702,11 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
 
       {otherFree.length > 0 && (
         <section>
-          <h2 className="mb-1 font-medium">Other free windows</h2>
+          <h2 className="mb-1 font-medium">{view === "mine" ? "Your other free time" : "Other free windows"}</h2>
           <p className="mb-2 text-xs text-neutral-500">
-            Everyone is free, but it&apos;s before the first class or after the last —
-            someone has to come to campus for it.
+            {view === "mine"
+              ? "Free, but before your first class or after your last — you'd be coming to campus specially."
+              : "Everyone is free, but it's before the first class or after the last — someone has to come to campus for it."}
           </p>
           <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {otherFree.map((w, i) => (

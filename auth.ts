@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import { upsertUser } from "@/lib/users";
+import { getUser, upsertUser } from "@/lib/users";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [Google],
@@ -10,7 +10,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     // Runs only on sign-in, when `profile` is present. We keep our own users
     // row and carry its id on the token, so no database adapter is needed.
-    async jwt({ token, profile }) {
+    async jwt({ token, profile, trigger }) {
       if (profile?.sub) {
         const user = await upsertUser({
           googleSub: profile.sub,
@@ -19,12 +19,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           image: typeof profile.picture === "string" ? profile.picture : null,
         });
         token.appUserId = user.id;
+        token.avatar = user.avatar;
+      } else if (trigger === "update" && typeof token.appUserId === "number") {
+        // The client asks for this after changing its picture. Re-reading here
+        // rather than on every session lookup keeps the common path free of a
+        // database round trip.
+        token.avatar = (await getUser(token.appUserId))?.avatar ?? null;
       }
       return token;
     },
     async session({ session, token }) {
       if (typeof token.appUserId === "number") {
         session.appUserId = token.appUserId;
+      }
+      // A chosen picture wins over Google's everywhere the session is read.
+      if (session.user && typeof token.avatar === "string") {
+        session.user.image = token.avatar;
       }
       return session;
     },
