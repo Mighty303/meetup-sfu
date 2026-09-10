@@ -138,14 +138,22 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
           (SELECT COUNT(*) FROM meetup.users) AS users,
           (SELECT COUNT(*) FROM meetup.members) AS members,
           (SELECT COUNT(*) FROM meetup.members WHERE user_id IS NULL) AS ownerless_members,
-          (SELECT COUNT(*) FROM meetup.member_courses) AS course_rows,
+          -- Sections actually stored, not the fan-out: counting the effective
+          -- view here would multiply one person's timetable by the number of
+          -- groups they're in and call it growth.
+          (
+            (SELECT COUNT(*) FROM meetup.user_courses)
+            + (SELECT COUNT(*) FROM meetup.member_courses mc
+               JOIN meetup.members m ON m.id = mc.member_id
+               WHERE m.user_id IS NULL)
+          ) AS course_rows,
           (SELECT COUNT(*) FROM meetup.member_blocks) AS block_rows,
           (SELECT COUNT(*) FROM meetup.sections_cache) AS cached_terms,
           (SELECT COUNT(*) FROM meetup.users WHERE avatar IS NOT NULL) AS custom_avatars,
           (SELECT COUNT(*) FROM meetup.users WHERE created_at > NOW() - INTERVAL '7 days') AS new_users_7d,
           (SELECT COUNT(*) FROM meetup.users WHERE updated_at > NOW() - INTERVAL '7 days') AS active_users_7d,
           (SELECT COUNT(*) FROM meetup.groups WHERE created_at > NOW() - INTERVAL '7 days') AS new_groups_7d,
-          (SELECT COUNT(DISTINCT member_id) FROM meetup.member_courses) AS members_with_courses,
+          (SELECT COUNT(DISTINCT member_id) FROM meetup.member_courses_effective) AS members_with_courses,
           (SELECT COUNT(DISTINCT user_id) FROM meetup.members WHERE user_id IS NOT NULL) AS users_in_groups
       `,
 
@@ -187,33 +195,33 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
       `,
 
       // The users join is at most one row per member, so it can't inflate the
-      // course count the member_courses join produces.
+      // course count the courses join produces.
       sql`
         SELECT g.id, g.code, g.name, g.term, g.created_at,
                COUNT(DISTINCT m.id) AS members,
                COUNT(DISTINCT m.user_id) AS signed_in,
-               COUNT(DISTINCT mc.member_id) AS scheduled,
-               COUNT(mc.class_number) AS course_rows,
+               COUNT(DISTINCT ce.member_id) AS scheduled,
+               COUNT(ce.class_number) AS course_rows,
                MAX(u.updated_at) AS last_seen
         FROM meetup.groups g
         LEFT JOIN meetup.members m ON m.group_id = g.id
-        LEFT JOIN meetup.member_courses mc ON mc.member_id = m.id
+        LEFT JOIN meetup.member_courses_effective ce ON ce.member_id = m.id
         LEFT JOIN meetup.users u ON u.id = m.user_id
         GROUP BY g.id
         ORDER BY g.created_at DESC
       `,
 
+      // Sections are counted straight off the profile now. Going via the member
+      // rows would multiply them by the number of groups the person is in,
+      // which is exactly the duplication this feature removed.
       sql`
         SELECT u.id, u.email, u.name,
                COALESCE(u.avatar, u.image) AS image,
                (u.avatar IS NOT NULL) AS custom_avatar,
                u.created_at, u.updated_at,
-               COUNT(DISTINCT m.id) AS groups,
-               COUNT(mc.class_number) AS course_rows
+               (SELECT COUNT(*) FROM meetup.members m WHERE m.user_id = u.id) AS groups,
+               (SELECT COUNT(*) FROM meetup.user_courses uc WHERE uc.user_id = u.id) AS course_rows
         FROM meetup.users u
-        LEFT JOIN meetup.members m ON m.user_id = u.id
-        LEFT JOIN meetup.member_courses mc ON mc.member_id = m.id
-        GROUP BY u.id
         ORDER BY u.updated_at DESC
       `,
 
@@ -243,13 +251,12 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
         ORDER BY fetched_at DESC
       `,
 
-      // class_number is only unique within a term, so the term comes along.
+      // class_number is only unique within a term, so the term comes along —
+      // which is why the profile schedule is keyed by term too.
       sql`
-        SELECT g.term, mc.class_number, COUNT(*) AS members
-        FROM meetup.member_courses mc
-        JOIN meetup.members m ON m.id = mc.member_id
-        JOIN meetup.groups g ON g.id = m.group_id
-        GROUP BY g.term, mc.class_number
+        SELECT ce.term, ce.class_number, COUNT(DISTINCT ce.member_id) AS members
+        FROM meetup.member_courses_effective ce
+        GROUP BY ce.term, ce.class_number
         ORDER BY 3 DESC, 2
         LIMIT 12
       `,

@@ -62,6 +62,15 @@ Members added before sign-in existed have no owner. They stay editable by
 anyone with the link, and a signed-in user can **claim** one to take it over
 along with its saved schedule, rather than starting a duplicate row.
 
+Your schedule is stored per person, per term, in `meetup.user_courses` — not
+per group. Join a second group in the same term and your classes are already
+there; edit them anywhere and every group in that term follows. Terms are kept
+apart because a class number is only unique inside one, so a flat list would
+resolve a fall section against the spring catalogue and quietly draw the wrong
+course. Ownerless rows have no profile to read from and keep their own courses
+in `meetup.member_courses`; `meetup.member_courses_effective` is the view that
+decides which of the two a member row shows.
+
 ## Admin portal
 
 `/admin` shows every group, every user, what's in the database and how much

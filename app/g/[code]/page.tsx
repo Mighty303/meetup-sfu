@@ -571,6 +571,14 @@ function GroupSchedule({ code }: { code: string }) {
             onPreview={setPreview}
           />
 
+          {/* Editing here is not local to this group, and finding that out by
+              accident in another one would be a nasty surprise. */}
+          <p className="text-xs text-neutral-500">
+            This is your {fromTermCode(state.group.term)} schedule — it&apos;s
+            shared with every group you&apos;re in that term, so you only enter
+            it once. Changes here show up in all of them.
+          </p>
+
           <div className="flex flex-wrap items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
             {confirmLeave ? (
