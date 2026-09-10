@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { HoverCard, type HoverCardData } from "@/components/HoverCard";
+import { NowLine, useNowMarker } from "@/components/NowLine";
 import type { Member } from "@/components/WeekGrid";
 import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
 import { availabilityBands, type BusyBlock } from "@/lib/overlap";
@@ -45,6 +46,8 @@ interface Props {
   dayEnd: number;
   /** One person's week: the ramp collapses to free/busy, and so does the wording. */
   solo?: boolean;
+  /** Monday of the week on screen, as YYYY-MM-DD — places the "now" line. */
+  weekStart?: string;
 }
 
 /**
@@ -57,8 +60,16 @@ interface Props {
  * edges, not on a half-hour clock — so a green stretch here starts and ends at
  * the times the lists below the grid quote.
  */
-export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false }: Props) {
+export function HeatGrid({
+  members,
+  busyByMember,
+  dayStart,
+  dayEnd,
+  solo = false,
+  weekStart,
+}: Props) {
   const [hover, setHover] = useState<HoverCardData | null>(null);
+  const now = useNowMarker(weekStart, dayStart, dayEnd);
 
   // Only people with a schedule constrain anything; someone with nothing saved
   // would read as free all week and wash the whole grid green.
@@ -285,6 +296,8 @@ export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false
                         </div>
                       );
                     })}
+
+                  {now?.day === day && <NowLine top={pct(now.minutes)} minutes={now.minutes} />}
                 </div>
               </div>
             ))}

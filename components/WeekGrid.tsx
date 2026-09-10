@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { HoverCard, type HoverCardData } from "@/components/HoverCard";
+import { NowLine, useNowMarker } from "@/components/NowLine";
 import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
 import type { BusyBlock, FreeWindow } from "@/lib/overlap";
 import { formatTime, WEEKDAYS, type DayKey } from "@/lib/sfu";
@@ -185,6 +186,8 @@ interface Props {
   dayEnd: number;
   /** One person's week: labels drop the group framing. */
   solo?: boolean;
+  /** Monday of the week on screen, as YYYY-MM-DD — places the "now" line. */
+  weekStart?: string;
   /** A section being considered, drawn over the week but not part of it. */
   preview?: BusyBlock[];
   /** Whose it would be — the preview borrows their colour. */
@@ -198,6 +201,7 @@ export function WeekGrid({
   dayStart,
   dayEnd,
   solo = false,
+  weekStart,
   preview = [],
   previewColor = "#737373",
 }: Props) {
@@ -205,6 +209,7 @@ export function WeekGrid({
   // overflow, so an in-flow tooltip would be cut off at the column edge. A
   // fixed-position card follows the cursor and escapes the clipping entirely.
   const [hover, setHover] = useState<HoverCardData | null>(null);
+  const now = useNowMarker(weekStart, dayStart, dayEnd);
 
   const span = dayEnd - dayStart;
   const pct = (mins: number) => ((mins - dayStart) / span) * 100;
@@ -474,6 +479,8 @@ export function WeekGrid({
                         </div>
                       );
                     })}
+
+                  {now?.day === day && <NowLine top={pct(now.minutes)} minutes={now.minutes} />}
                 </div>
               </div>
             );

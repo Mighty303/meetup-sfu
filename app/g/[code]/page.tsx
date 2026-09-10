@@ -732,6 +732,7 @@ function GroupSchedule({ code }: { code: string }) {
           dayStart={DAY_START}
           dayEnd={DAY_END}
           solo={view === "mine"}
+          weekStart={week ?? undefined}
         />
       ) : (
         <WeekGrid
@@ -741,6 +742,7 @@ function GroupSchedule({ code }: { code: string }) {
           dayStart={DAY_START}
           dayEnd={DAY_END}
           solo={view === "mine"}
+          weekStart={week ?? undefined}
           preview={previewBlocks}
           previewColor={me?.color}
         />
