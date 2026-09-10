@@ -254,7 +254,13 @@ export async function removeMember(memberId: number, groupId: number): Promise<v
   `;
 }
 
-/** The one permission a group admin has that a member doesn't. */
+/** Admin-only, like deleting: the name is what everyone else sees. */
+export async function renameGroup(groupId: number, name: string): Promise<void> {
+  const sql = getDb();
+  await sql`UPDATE meetup.groups SET name = ${name} WHERE id = ${groupId}`;
+}
+
+/** The permissions a group admin has that a member doesn't. */
 export async function isGroupOwner(groupId: number, userId: number | null): Promise<boolean> {
   if (!userId) return false;
   const sql = getDb();

@@ -118,6 +118,9 @@ function GroupSchedule({ code }: { code: string }) {
   // Deleting is irreversible and takes everyone's schedules, so the button has
   // to be armed first — no dialog, just a second, differently-worded click.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The group's own name, which only its admin can change. Null when nobody is
+  // editing it; the string being edited otherwise, so "" is a real state.
+  const [draftName, setDraftName] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     // No minMinutes here: the page derives its own windows from busyByMember, so
@@ -176,6 +179,22 @@ function GroupSchedule({ code }: { code: string }) {
     setSaving(true);
     await fetch(`/api/groups/${code}/members/${me.id}`, { method: "DELETE" });
     setSaving(false);
+    load();
+  }
+
+  async function saveGroupName(e: React.FormEvent) {
+    e.preventDefault();
+    if (draftName === null || !draftName.trim()) return;
+    setSaving(true);
+    const res = await fetch(`/api/groups/${code}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: draftName }),
+    });
+    setSaving(false);
+    if (!res.ok) { setError((await res.json()).error ?? "could not rename this group"); return; }
+    setError(null);
+    setDraftName(null);
     load();
   }
 
@@ -308,7 +327,41 @@ function GroupSchedule({ code }: { code: string }) {
     <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{view === "mine" ? "My Schedule" : state.group.name}</h1>
+          {/* The name is the group's, not a member's, so it's edited here
+              rather than on the profile page — and only by the admin. */}
+          {draftName !== null ? (
+            <form onSubmit={saveGroupName} className="flex flex-wrap items-center gap-2">
+              <input
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                autoFocus
+                maxLength={120}
+                onKeyDown={(e) => { if (e.key === "Escape") setDraftName(null); }}
+                className="rounded-lg border border-neutral-300 px-2 py-1 text-2xl font-semibold tracking-tight dark:border-neutral-700 dark:bg-neutral-900"
+              />
+              <button
+                disabled={saving || !draftName.trim()}
+                className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+              >
+                Save
+              </button>
+              <button type="button" onClick={() => setDraftName(null)} className="text-sm text-neutral-500">
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight">{view === "mine" ? "My Schedule" : state.group.name}</h1>
+              {isAdmin && view === "everyone" && (
+                <button
+                  onClick={() => setDraftName(state.group.name)}
+                  className="text-xs text-neutral-500 underline-offset-2 hover:underline"
+                >
+                  Rename
+                </button>
+              )}
+            </div>
+          )}
           <p className="text-sm text-neutral-500">
             {view === "mine" && `${state.group.name} · `}
             {fromTermCode(state.group.term)} · code <span className="font-mono">{state.group.code}</span>
