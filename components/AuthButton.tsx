@@ -4,7 +4,8 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
 
 // `stacked` is for the mobile menu, where the row has the whole panel width
-// to itself and the sign-out control reads better on its own line.
+// to itself, so the account block is styled as menu rows rather than as
+// the compact desktop control.
 export function AuthButton({ stacked = false }: { stacked?: boolean }) {
   const { data: session, status } = useSession();
   if (status === "loading") {
@@ -23,27 +24,48 @@ export function AuthButton({ stacked = false }: { stacked?: boolean }) {
     );
   }
 
-  return (
-    <div className={stacked ? "flex flex-col items-start gap-3" : "flex items-center gap-2"}>
-      <div className="flex items-center gap-2">
-        {session.user.image && (
-          <Image
-            src={session.user.image}
-            alt=""
-            width={28}
-            height={28}
-            className="rounded-full"
-          />
-        )}
-        <span className={`truncate text-sm text-neutral-600 dark:text-neutral-300 ${stacked ? "" : "max-w-[7rem] sm:max-w-none"}`}>
-          {session.user.name ?? session.user.email}
-        </span>
+  if (stacked) {
+    // In the mobile menu the account block is just more menu rows: same
+    // padding and alignment as the nav links, so it doesn't read as a
+    // transplanted desktop control. Sign out isn't destructive — neutral
+    // until hover, and behind a divider so it isn't hit by accident.
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 px-3 py-1.5">
+          {session.user.image && (
+            <Image src={session.user.image} alt="" width={28} height={28} className="rounded-full" />
+          )}
+          <span className="min-w-0 truncate text-sm text-neutral-600 dark:text-neutral-300">
+            {session.user.name ?? session.user.email}
+          </span>
+        </div>
+        <button
+          onClick={() => signOut()}
+          className="w-full rounded-lg px-3 py-1.5 text-left text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-red-600 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-red-400"
+        >
+          Sign out
+        </button>
       </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {session.user.image && (
+        <Image
+          src={session.user.image}
+          alt=""
+          width={28}
+          height={28}
+          className="rounded-full"
+        />
+      )}
+      <span className="max-w-[7rem] truncate text-sm text-neutral-600 sm:max-w-none dark:text-neutral-300">
+        {session.user.name ?? session.user.email}
+      </span>
       <button
         onClick={() => signOut()}
-        className={`rounded-lg border border-neutral-300 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800 ${
-          stacked ? "px-3 py-1.5 text-sm" : "px-2.5 py-1 text-xs"
-        }`}
+        className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
       >
         Sign out
       </button>

@@ -120,7 +120,7 @@ function NavBarContent() {
           className="flex flex-col gap-1 border-t border-neutral-200 p-3 sm:hidden dark:border-neutral-800"
         >
           {links}
-          <div className="mt-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          <div className="mt-1 border-t border-neutral-200 pt-2 dark:border-neutral-800">
             <AuthButton stacked />
           </div>
         </div>
