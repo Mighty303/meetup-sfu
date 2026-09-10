@@ -48,6 +48,13 @@ interface Props {
   solo?: boolean;
   /** Monday of the week on screen, as YYYY-MM-DD — places the "now" line. */
   weekStart?: string;
+  /**
+   * Height of the day columns. Defaults to the shared COLUMN_HEIGHT, which is
+   * what keeps this and the detailed grid the same size behind their toggle —
+   * only pass something else somewhere the two aren't swapped, like the home
+   * page demo, where a full-height week is just a wall to scroll past.
+   */
+  columnHeight?: string;
 }
 
 /**
@@ -67,6 +74,7 @@ export function HeatGrid({
   dayEnd,
   solo = false,
   weekStart,
+  columnHeight = COLUMN_HEIGHT,
 }: Props) {
   const [hover, setHover] = useState<HoverCardData | null>(null);
   const now = useNowMarker(weekStart, dayStart, dayEnd);
@@ -154,7 +162,7 @@ export function HeatGrid({
               detailed grid's so the two views don't shift when you toggle. */}
           <div className="w-12 shrink-0">
             <div className="mb-1 text-center font-medium" aria-hidden>&nbsp;</div>
-            <div className={`relative ${COLUMN_HEIGHT}`}>
+            <div className={`relative ${columnHeight}`}>
               {hours.map((h) => (
                 <div
                   key={h}
@@ -174,7 +182,7 @@ export function HeatGrid({
                   {LABELS[day]}
                 </div>
                 <div
-                  className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 ${COLUMN_HEIGHT}`}
+                  className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 ${columnHeight}`}
                 >
                   {/* Behind the bands, so the hour lines stay readable through
                       the pale end of the ramp and vanish under the dark end. */}

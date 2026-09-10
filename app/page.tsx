@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { DemoAvailability } from "@/components/DemoAvailability";
 import { currentTermCode, fromTermCode } from "@/lib/sfu";
 
 interface Membership {
@@ -79,8 +80,8 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-col justify-center gap-8 p-6">
-      <div>
+    <main className="mx-auto flex w-full max-w-4xl flex-col justify-center gap-8 p-6 pb-20 sm:pb-24">
+      <div className="mx-auto w-full max-w-lg">
         <h1 className="text-3xl font-semibold tracking-tight">meetup-sfu</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400">
           Everyone drops their SFU schedule in. The grid shows when you&apos;re all free
@@ -88,10 +89,17 @@ export default function Home() {
         </p>
       </div>
 
+      {/* The pitch above, as something you can actually look at. Invented
+          people on invented courses — see DemoAvailability. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-center text-sm font-medium">What it looks like</h2>
+        <DemoAvailability />
+      </section>
+
       {/* Groups arrive a fetch after the session does; a blank gap where the
           list is about to appear reads as "you have none". */}
       {authStatus === "authenticated" && memberships === null && (
-        <section className="flex flex-col gap-2" aria-hidden>
+        <section className="mx-auto w-full max-w-lg flex flex-col gap-2" aria-hidden>
           <h2 className="text-sm font-medium">Your groups</h2>
           <ul className="flex flex-col gap-3">
             {[
@@ -125,7 +133,7 @@ export default function Home() {
       )}
 
       {authStatus === "authenticated" && memberships && memberships.length > 0 && (
-        <section className="flex flex-col gap-2">
+        <section className="mx-auto w-full max-w-lg flex flex-col gap-2">
           <h2 className="text-sm font-medium">Your groups</h2>
           <ul className="flex flex-col gap-3">
             {memberships.map((m) => (
@@ -188,7 +196,7 @@ export default function Home() {
         </section>
       )}
 
-      <form onSubmit={create} className="flex flex-col gap-3">
+      <form onSubmit={create} className="mx-auto w-full max-w-lg flex flex-col gap-3">
         <label className="text-sm font-medium">Start a group</label>
         <input
           value={name}
@@ -218,7 +226,7 @@ export default function Home() {
 
       <form
         onSubmit={(e) => { e.preventDefault(); router.push(`/g/${code.trim().toUpperCase()}`); }}
-        className="flex flex-col gap-3 border-t border-neutral-200 pt-6 dark:border-neutral-800"
+        className="mx-auto w-full max-w-lg flex flex-col gap-3 border-t border-neutral-200 pt-6 dark:border-neutral-800"
       >
         <label className="text-sm font-medium">Or join with a code</label>
         <div className="flex gap-2">
