@@ -126,9 +126,9 @@ export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false
           {/* Otherwise a blank Monday, and blank mornings, read as a bug
               rather than as the whole point of the view. */}
           <span className="w-full text-center text-neutral-400 dark:text-neutral-500">
-            Only gaps between classes are shaded. Before the day&apos;s first class
-            and after its last, campus is empty —{" "}
-            {solo ? "you'd be going in specially" : "someone would be travelling in specially"}.
+            Only gaps between someone&apos;s own classes are shaded. Before their
+            first class and after their last,{" "}
+            {solo ? "you'd be going in specially" : "they'd be travelling in specially"}.
           </span>
         </div>
 
@@ -213,7 +213,7 @@ export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false
                                   ? awayNames.length > 0
                                     ? ["No class this day — you'd come to campus specially"]
                                     : outsideNames.length > 0
-                                      ? ["Before the first class of the day, or after the last"]
+                                      ? ["Before your first class or after your last"]
                                       : []
                                   : [
                                       freeNames.length > 0
@@ -224,7 +224,7 @@ export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false
                                       // spelling out — otherwise a 2/7 next to a full
                                       // detailed grid looks like a bug.
                                       ...(outsideNames.length > 0
-                                        ? ["Campus is empty at this hour — no classes either side"]
+                                        ? [`Not on campus yet, or already gone: ${outsideNames.join(", ")}`]
                                         : []),
                                       ...(awayNames.length > 0
                                         ? [`No class this day: ${awayNames.join(", ")}`]
