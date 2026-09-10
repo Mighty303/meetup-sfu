@@ -123,10 +123,12 @@ function GroupSchedule({ code }: { code: string }) {
   // "mine" narrows the whole page to your own row: your classes at full width
   // and your own gaps, without everyone else's blocks to read past.
   const view = searchParams.get("view") === "mine" ? "mine" : "everyone";
-  // "heat" swaps the labelled blocks for a LettuceMeet-style shading of how
-  // many people are free in each half-hour. In the URL so a reload — and a
-  // shared link — keeps whichever view you were reading.
-  const grid = searchParams.get("grid") === "heat" ? "heat" : "detailed";
+  // Availability — a LettuceMeet-style shading of how many people are free in
+  // each half-hour — is the default: it's the reading that answers "when can we
+  // meet", and the one that survives five clashing schedules. "detailed" opts
+  // back into the labelled blocks. In the URL so a reload — and a shared link —
+  // keeps whichever view you were reading.
+  const grid = searchParams.get("grid") === "detailed" ? "detailed" : "heat";
   const [showAllPartial, setShowAllPartial] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -198,13 +200,13 @@ function GroupSchedule({ code }: { code: string }) {
   function pillHref(nextCode: string, nextView: "mine" | "everyone"): string {
     const params = new URLSearchParams();
     if (nextView === "mine") params.set("view", "mine");
-    if (grid === "heat") params.set("grid", "heat");
+    if (grid === "detailed") params.set("grid", "detailed");
     return `/g/${nextCode}${params.size > 0 ? `?${params}` : ""}`;
   }
 
   function setGrid(next: "detailed" | "heat") {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === "heat") params.set("grid", "heat");
+    if (next === "detailed") params.set("grid", "detailed");
     else params.delete("grid");
     // replace, not push: toggling a view isn't a step you want to hit Back through.
     router.replace(`/g/${code}${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
@@ -763,11 +765,11 @@ function GroupSchedule({ code }: { code: string }) {
           </button>
         )}
 
-        {/* Two readings of the same week. Detailed keeps the labelled blocks;
-            availability shades each half-hour by how many people are free,
-            which is the only view that survives five clashing schedules. */}
+        {/* Two readings of the same week. Availability shades each half-hour by
+            how many people are free; detailed trades that for the labelled
+            blocks, which is what you want when checking one person's classes. */}
         <div className="ml-1 flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
-          {(["detailed", "heat"] as const).map((mode) => (
+          {(["heat", "detailed"] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setGrid(mode)}
