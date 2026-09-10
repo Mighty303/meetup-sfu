@@ -444,10 +444,10 @@ export interface AvailabilityBand extends Interval {
    */
   awayIndices: number[];
   /**
-   * Has class that day, but this band is before their own first class or after
-   * their own last. Free in the sense that nothing is booked, but not free in
-   * the sense that matters here: they aren't on campus yet, or have already
-   * gone home, so meeting means a trip made specially.
+   * Has class that day, but this band is before their own first class, or
+   * after the last class anyone has. Free in the sense that nothing is booked,
+   * but not free in the sense that matters here: they aren't on campus yet, or
+   * campus has emptied for the day, so meeting means a trip made specially.
    */
   outsideIndices: number[];
   /** Campuses the free members are anchored to around this band. */
@@ -470,16 +470,21 @@ export interface AvailabilityOptions {
  * often nowhere. This answers the weaker, more useful question — how many, at
  * what time — and lets the shading carry the count.
  *
- * Only the gaps count, and only each member's own. Someone contributes to a band
- * solely between their own first class that day and their own last. Both ends
- * are personal on purpose: nobody comes in early for a morning with nothing in
- * it, and once a person's last class is done they've gone home — a window after
- * that is a trip made specially, whoever else is still on campus.
+ * Only the gaps count. The morning before someone's first class and the evening
+ * after the teaching day ends are not availability, they're a commute you'd be
+ * asking for. Left in, they dominate the grid — every day is bright from 8am
+ * and again from 5pm, which says nothing, while the hour-long gap at noon that
+ * people could actually make gets no more weight than a Tuesday nobody is on
+ * campus at all.
  *
- * This is a deliberately strict reading, and it shows: seven personal windows
- * rarely intersect, so a big group will see mostly one or two people free at a
- * time rather than a bright block. That's the honest number. Widening either
- * end would inflate it with people who aren't there.
+ * The two ends are cut differently, because they aren't the same question.
+ * Arriving is personal: nobody comes in early for a morning with nothing in it,
+ * so a member starts counting at their own first class. Leaving is not: someone
+ * whose last class ended at 1:20 is still standing on campus at 1:30, and
+ * staying an hour is a smaller favour than travelling in — so they keep
+ * counting until the last class of the day is out, whoever it belongs to.
+ * Cutting the evening per member as well collapses the grid: personal windows
+ * rarely intersect, and with a group of seven nothing rose above one free.
  *
  * The bands are cut at real class edges, the same edges the detailed grid draws
  * its blocks on, and never on a clock grid: a fixed half-hour row would put a
@@ -499,17 +504,14 @@ export function availabilityBands({
   for (const day of days) {
     const dayBusy = members.map((m) => m.busy.filter((b) => b.day === day));
     const away = members.map((_, i) => i).filter((i) => dayBusy[i].length === 0);
-    // First class to last class, per member: the stretch of the day each of them
-    // is actually on campus for. Both edges are class edges, so they're always
-    // cut points and a segment is never half in and half out.
-    const onCampus = dayBusy.map((busy) =>
-      busy.length === 0
-        ? null
-        : {
-            start: Math.min(...busy.map((b) => b.start)),
-            end: Math.max(...busy.map((b) => b.end)),
-          }
+    // When each member first has to be on campus, and when the day is finally
+    // over for everyone. Both are class edges, so they're always cut points and
+    // a segment is never half in and half out.
+    const arrival = dayBusy.map((busy) =>
+      busy.length === 0 ? null : Math.min(...busy.map((b) => b.start))
     );
+    const allBlocks = dayBusy.flat();
+    const lastOut = allBlocks.length === 0 ? null : Math.max(...allBlocks.map((b) => b.end));
 
     // Cut the day wherever anyone's status can change. Between two cuts nobody
     // starts or stops a class, so the free set is constant across the segment.
@@ -561,10 +563,10 @@ export function availabilityBands({
       const segFree: number[] = [];
       const segOutside: number[] = [];
       dayBusy.forEach((busy, mi) => {
-        const span = onCampus[mi];
-        if (span === null) return; // not on campus at all today
-        if (to <= span.start || from >= span.end) {
-          // Hasn't come in yet, or has already gone home.
+        const arrives = arrival[mi];
+        if (arrives === null) return; // not on campus at all today
+        // Hasn't come in yet, or the day is over for the whole group.
+        if (to <= arrives || (lastOut !== null && from >= lastOut)) {
           segOutside.push(mi);
           return;
         }

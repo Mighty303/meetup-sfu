@@ -126,9 +126,9 @@ export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false
           {/* Otherwise a blank Monday, and blank mornings, read as a bug
               rather than as the whole point of the view. */}
           <span className="w-full text-center text-neutral-400 dark:text-neutral-500">
-            Only gaps between someone&apos;s own classes are shaded. Before their
-            first class and after their last,{" "}
-            {solo ? "you'd be going in specially" : "they'd be travelling in specially"}.
+            Only gaps are shaded. Nobody counts before their own first class, and
+            nothing counts once the day&apos;s last class is out —{" "}
+            {solo ? "you'd be going in specially" : "someone would be travelling in specially"}.
           </span>
         </div>
 
@@ -213,7 +213,7 @@ export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false
                                   ? awayNames.length > 0
                                     ? ["No class this day — you'd come to campus specially"]
                                     : outsideNames.length > 0
-                                      ? ["Before your first class or after your last"]
+                                      ? ["Before your first class, or after the day's last"]
                                       : []
                                   : [
                                       freeNames.length > 0
