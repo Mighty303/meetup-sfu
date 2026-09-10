@@ -11,7 +11,7 @@ export function NavBar() {
 }
 
 function NavBarContent() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -30,6 +30,8 @@ function NavBarContent() {
   }, [open]);
 
   const signedIn = status === "authenticated";
+  // Server-side flag, so the allowlist never ships in the client bundle.
+  const isAdmin = signedIn && session?.isAdmin === true;
   const mySchedule = pathname === "/my-schedule" || (!!currentCode && viewParam === "mine");
 
   const links = (
@@ -50,6 +52,9 @@ function NavBarContent() {
         >
           Profile
         </NavLink>
+      )}
+      {isAdmin && (
+        <NavLink href="/admin" active={pathname === "/admin"}>Admin</NavLink>
       )}
     </>
   );

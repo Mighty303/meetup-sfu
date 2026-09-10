@@ -65,6 +65,24 @@ Members added before sign-in existed have no owner. They stay editable by
 anyone with the link, and a signed-in user can **claim** one to take it over
 along with its saved schedule, rather than starting a duplicate row.
 
+## Admin portal
+
+`/admin` shows every group, every user, what's in the database and how much
+space it takes. It's server-gated: the session id on the JWT is resolved to a
+`meetup.users` row and that row's email must be on `ADMIN_EMAILS` — which is
+only ever written from Google's verified profile at sign-in, never from
+anything the browser sends. A signed-in visitor who isn't on the list gets a
+404, so the portal doesn't confirm it exists.
+
+`ADMIN_EMAILS` has no default. This repository is public, so a baked-in address
+would become the allowlist of every clone of it; leave it unset and the portal
+is closed to everyone, including you.
+
+Set `ADMIN_GOOGLE_SUB` to the account id the portal prints to pin access to one
+Google account rather than an address. The nav link is driven by
+`session.isAdmin`, so the allowlist never reaches the client bundle.
+`/api/admin/metrics` returns the same figures as JSON, gated identically.
+
 ## Scripts
 
 | command | does |

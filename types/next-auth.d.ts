@@ -5,6 +5,8 @@ declare module "next-auth" {
      * already exists as a string (Google's subject) and this is our own serial.
      */
     appUserId?: number;
+    /** Only gates the nav link; every admin surface re-checks server-side. */
+    isAdmin?: boolean;
   }
 }
 
