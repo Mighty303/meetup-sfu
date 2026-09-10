@@ -84,6 +84,39 @@ export default function Home() {
         </p>
       </div>
 
+      {/* Groups arrive a fetch after the session does; a blank gap where the
+          list is about to appear reads as "you have none". */}
+      {authStatus === "authenticated" && memberships === null && (
+        <section className="flex flex-col gap-2" aria-hidden>
+          <h2 className="text-sm font-medium">Your groups</h2>
+          <ul className="flex flex-col gap-1.5">
+            {[
+              { name: "w-32", chips: ["w-20", "w-24"] },
+              { name: "w-24", chips: ["w-16", "w-20", "w-14", "w-20"] },
+            ].map((row, i) => (
+              <li
+                key={i}
+                className="flex animate-pulse flex-col gap-2 rounded-lg border border-neutral-200 px-3 py-3 dark:border-neutral-800"
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`h-4 rounded bg-neutral-200 dark:bg-neutral-800 ${row.name}`} />
+                  <div className="h-3 w-16 rounded bg-neutral-200 dark:bg-neutral-800" />
+                  <div className="ml-auto h-3 w-20 rounded bg-neutral-200 dark:bg-neutral-800" />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {row.chips.map((w, j) => (
+                    <div key={j} className="flex items-center gap-1.5">
+                      <div className="h-4 w-4 rounded-full bg-neutral-200 dark:bg-neutral-800" />
+                      <div className={`h-3 rounded bg-neutral-200 dark:bg-neutral-800 ${w}`} />
+                    </div>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {authStatus === "authenticated" && memberships && memberships.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Your groups</h2>

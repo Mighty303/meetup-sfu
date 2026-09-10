@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
+import { ProfileBodySkeleton } from "@/components/Skeleton";
 import { ColorPicker } from "@/components/ColorPicker";
 import { fileToAvatar } from "@/lib/avatar-file";
 import { CoursePicker } from "@/components/CoursePicker";
@@ -214,7 +215,12 @@ export default function ProfilePage() {
   }
 
   if (authStatus === "loading") {
-    return <main className="mx-auto w-full max-w-2xl p-6 text-neutral-500">Loading…</main>;
+    return (
+      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
+        <ProfileBodySkeleton />
+      </main>
+    );
   }
 
   if (authStatus !== "authenticated") {
@@ -251,7 +257,7 @@ export default function ProfilePage() {
       </header>
 
       {!data ? (
-        <p className="text-neutral-500">Loading…</p>
+        <ProfileBodySkeleton />
       ) : (
         <>
           <section className="flex flex-wrap items-center gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">

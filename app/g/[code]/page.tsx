@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { CoursePicker } from "@/components/CoursePicker";
+import { GroupPageSkeleton } from "@/components/Skeleton";
 import { WeekGrid } from "@/components/WeekGrid";
 import { blocksFromSection, commonFree, partialFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
@@ -82,7 +83,7 @@ const DAY_END = 22 * 60;
 export default function GroupPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-lg p-6 text-neutral-500">Loading…</main>}>
+    <Suspense fallback={<GroupPageSkeleton />}>
       <GroupSchedule key={code} code={code} />
     </Suspense>
   );
@@ -223,7 +224,7 @@ function GroupSchedule({ code }: { code: string }) {
   }, [schedules, view]);
 
   if (view === "mine" && authStatus === "loading") {
-    return <main className="mx-auto w-full max-w-lg p-6 text-neutral-500">Loading your schedule…</main>;
+    return <GroupPageSkeleton solo />;
   }
   if (view === "mine" && !signedIn) {
     return (
@@ -245,7 +246,7 @@ function GroupSchedule({ code }: { code: string }) {
     return <main className="mx-auto w-full max-w-lg p-6"><p className="text-red-600">{error}</p></main>;
   }
   if (!state) {
-    return <main className="mx-auto w-full max-w-lg p-6 text-neutral-500">Loading…</main>;
+    return <GroupPageSkeleton solo={view === "mine"} />;
   }
 
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/g/${code}` : "";
