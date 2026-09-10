@@ -74,7 +74,19 @@ async function claim(memberId, groupId, userId) {
     WHERE id = ${memberId} AND group_id = ${groupId} AND user_id IS NULL
     RETURNING id
   `;
-  return rows.length > 0 ? "ok" : "not-claimable";
+  if (rows.length === 0) return "not-claimable";
+  // The row now reads its schedule off the claimer's profile, so the courses
+  // saved on it have to move there too.
+  await sql`
+    INSERT INTO meetup.user_courses (user_id, term, class_number)
+    SELECT ${userId}, g.term, mc.class_number
+    FROM meetup.member_courses mc
+    JOIN meetup.members m ON m.id = mc.member_id
+    JOIN meetup.groups g ON g.id = m.group_id
+    WHERE mc.member_id = ${memberId}
+    ON CONFLICT DO NOTHING
+  `;
+  return "ok";
 }
 
 const [g2] = await sql`
@@ -96,9 +108,22 @@ assert.equal(await claim(orphan.id, g2.id, carol.id), "ok", "an ownerless row ca
 assert.equal(await claim(orphan.id, g2.id, dave.id), "not-claimable", "a claimed row can't be re-claimed");
 assert.equal(await claim(orphan.id, g2.id, carol.id), "already-member", "claiming twice is refused");
 
-// The whole point: the claimed row keeps its saved schedule.
-const kept = await sql`SELECT class_number FROM meetup.member_courses WHERE member_id = ${orphan.id}`;
+// The whole point: the claimed row keeps its saved schedule. Read through the
+// effective view, not member_courses — after the claim the row is served from
+// the claimer's profile, so checking the old table would pass on a stale row
+// while the grid showed nothing.
+const kept = await sql`
+  SELECT class_number FROM meetup.member_courses_effective WHERE member_id = ${orphan.id}
+`;
 assert.deepEqual(kept.map((r) => r.class_number), ["6023"], "claiming preserves saved courses");
+const onProfile = await sql`
+  SELECT term, class_number FROM meetup.user_courses WHERE user_id = ${carol.id}
+`;
+assert.deepEqual(
+  onProfile.map((r) => [r.term, r.class_number]),
+  [["2025-fall", "6023"]],
+  "and the course lands on the profile under the group's term"
+);
 assert.equal(await canEdit(orphan.id, g2.id, carol.id), true, "claimer can now edit");
 assert.equal(await canEdit(orphan.id, g2.id, null), false, "and anonymous no longer can");
 
@@ -175,12 +200,21 @@ await leave(erinMember, orphanGroup.id);
 assert.equal(await isOwner(orphanGroup.id, erin.id), false, "leaving gives up the group");
 assert.equal(await isOwner(orphanGroup.id, frank.id), true, "and hands it to whoever is left");
 
-// Deleting the group takes the members with it.
+// Deleting the group takes the members with it. Frank is still in this one and
+// has a profile schedule for its term, which must survive the group that
+// happened to show it — losing your timetable because someone else deleted a
+// group is exactly what moving it onto the user is meant to prevent.
 await sql`INSERT INTO meetup.member_courses (member_id, class_number)
           SELECT id, '6023' FROM meetup.members WHERE group_id = ${orphanGroup.id}`;
+await sql`INSERT INTO meetup.user_courses (user_id, term, class_number)
+          VALUES (${frank.id}, '2025-fall', '6023') ON CONFLICT DO NOTHING`;
 await sql`DELETE FROM meetup.groups WHERE id = ${orphanGroup.id}`;
 const after = await sql`SELECT COUNT(*)::int AS n FROM meetup.members WHERE group_id = ${orphanGroup.id}`;
 assert.equal(after[0].n, 0, "deleting a group cascades to its members and their courses");
+const profileKept = await sql`
+  SELECT COUNT(*)::int AS n FROM meetup.user_courses WHERE user_id = ${frank.id}
+`;
+assert.equal(profileKept[0].n, 1, "deleting a group leaves the profile schedule alone");
 
 // Losing the admin's account must not delete the group.
 await sql`DELETE FROM meetup.users WHERE id = ${erin.id}`;

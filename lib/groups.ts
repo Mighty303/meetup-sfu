@@ -132,11 +132,13 @@ export async function addMember(
   `;
 
   const user = await sql`SELECT image FROM meetup.users WHERE id = ${userId}`;
+  // Not empty any more: if they've already saved a schedule for this term in
+  // another group, joining shows it here immediately. That's the whole point.
   return {
     id: rows[0].id,
     displayName: rows[0].display_name,
     color: rows[0].color,
-    classNumbers: [],
+    classNumbers: await getMemberCourses(rows[0].id),
     userId: rows[0].user_id,
     image: user[0]?.image ?? null,
   };
@@ -174,7 +176,23 @@ export async function claimMember(
     WHERE id = ${memberId} AND group_id = ${groupId} AND user_id IS NULL
     RETURNING id
   `;
-  return rows.length > 0 ? "ok" : "not-claimable";
+  if (rows.length === 0) return "not-claimable";
+
+  // The row just stopped reading member_courses and started reading the
+  // claimer's profile, so its saved sections have to come with it — otherwise
+  // claiming your own name would look like it had wiped your schedule, which is
+  // the exact thing claiming exists to prevent. Union, like the backfill: it
+  // adds to whatever they already had that term rather than replacing it.
+  await sql`
+    INSERT INTO meetup.user_courses (user_id, term, class_number)
+    SELECT ${userId}, g.term, mc.class_number
+    FROM meetup.member_courses mc
+    JOIN meetup.members m ON m.id = mc.member_id
+    JOIN meetup.groups g ON g.id = m.group_id
+    WHERE mc.member_id = ${memberId}
+    ON CONFLICT DO NOTHING
+  `;
+  return "ok";
 }
 
 export async function renameMember(
@@ -218,6 +236,9 @@ export async function canEditMember(
  * Leaving hands the group over. An admin who isn't in the group any more can
  * still delete it, and nobody left inside could — so ownership follows the
  * earliest remaining signed-in member, and only falls to null if there is none.
+ *
+ * Their schedule survives: it's keyed to the user, so leaving one group doesn't
+ * cost them the timetable they're still using in another.
  */
 export async function removeMember(memberId: number, groupId: number): Promise<void> {
   const sql = getDb();
@@ -255,7 +276,12 @@ export async function isGroupOwner(groupId: number, userId: number | null): Prom
   return rows.length > 0;
 }
 
-/** Members, their courses and their custom blocks go with it, by FK cascade. */
+/**
+ * Members and their custom blocks go with it, by FK cascade. Profile schedules
+ * don't: they hang off the user, not the group, so deleting a group no longer
+ * takes its members' timetables with it — only the ownerless rows' courses,
+ * which have nowhere else to live.
+ */
 export async function deleteGroup(groupId: number): Promise<void> {
   const sql = getDb();
   await sql`DELETE FROM meetup.groups WHERE id = ${groupId}`;
@@ -285,12 +311,15 @@ export async function getGroupState(
   opts: GroupStateOptions
 ): Promise<GroupState> {
   const sql = getDb();
+  // member_courses_effective, not member_courses: a signed-in member shows the
+  // schedule saved on their profile for this group's term, so the same person
+  // in two groups is the same timetable in both. See 005_profile_schedule.sql.
   const rows = await sql`
     SELECT m.id, m.display_name, m.color, m.user_id,
            COALESCE(u.avatar, u.image) AS image,
-           COALESCE(ARRAY_AGG(mc.class_number) FILTER (WHERE mc.class_number IS NOT NULL), '{}') AS class_numbers
+           COALESCE(ARRAY_AGG(ce.class_number) FILTER (WHERE ce.class_number IS NOT NULL), '{}') AS class_numbers
     FROM meetup.members m
-    LEFT JOIN meetup.member_courses mc ON mc.member_id = m.id
+    LEFT JOIN meetup.member_courses_effective ce ON ce.member_id = m.id
     LEFT JOIN meetup.users u ON u.id = m.user_id
     WHERE m.group_id = ${group.id}
     GROUP BY m.id, m.display_name, m.color, m.user_id, u.avatar, u.image
@@ -399,10 +428,10 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
   const rows = await sql`
     SELECT m.id AS member_id, m.display_name, m.color,
            g.id AS group_id, g.code, g.name, g.term, g.owner_user_id,
-           COALESCE(ARRAY_AGG(mc.class_number) FILTER (WHERE mc.class_number IS NOT NULL), '{}') AS class_numbers
+           COALESCE(ARRAY_AGG(ce.class_number) FILTER (WHERE ce.class_number IS NOT NULL), '{}') AS class_numbers
     FROM meetup.members m
     JOIN meetup.groups g ON g.id = m.group_id
-    LEFT JOIN meetup.member_courses mc ON mc.member_id = m.id
+    LEFT JOIN meetup.member_courses_effective ce ON ce.member_id = m.id
     WHERE m.user_id = ${userId}
     GROUP BY m.id, g.id
     ORDER BY g.created_at DESC
@@ -414,7 +443,7 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
   const roster = await sql`
     SELECT m.group_id, m.id, m.display_name, m.color,
            COALESCE(u.avatar, u.image) AS image,
-           EXISTS (SELECT 1 FROM meetup.member_courses mc WHERE mc.member_id = m.id) AS has_schedule
+           EXISTS (SELECT 1 FROM meetup.member_courses_effective ce WHERE ce.member_id = m.id) AS has_schedule
     FROM meetup.members m
     LEFT JOIN meetup.users u ON u.id = m.user_id
     WHERE m.group_id = ANY(${groupIds}::int[])
@@ -445,34 +474,71 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
   }));
 }
 
-/** Add one section to a member's schedule. Adding it twice is a no-op. */
+/**
+ * Add one section to whoever owns this member row. For a signed-in member that
+ * is their profile schedule for the group's term, so it shows up in every group
+ * they're in that term; for an ownerless row it stays on the row, as before.
+ *
+ * Both statements run, and each is a no-op for the case the other handles — the
+ * WHERE on user_id decides which one inserts. Adding twice is a no-op either way.
+ */
 export async function addMemberCourse(
   memberId: number,
   classNumber: string
 ): Promise<void> {
   const sql = getDb();
+  // The term is read off the member's own group rather than taken as an
+  // argument: it's a fact about the row being edited, and a caller that could
+  // pass the wrong one is a caller that could file a section under a term the
+  // person isn't studying.
+  await sql`
+    INSERT INTO meetup.user_courses (user_id, term, class_number)
+    SELECT m.user_id, g.term, ${classNumber}
+    FROM meetup.members m
+    JOIN meetup.groups g ON g.id = m.group_id
+    WHERE m.id = ${memberId} AND m.user_id IS NOT NULL
+    ON CONFLICT DO NOTHING
+  `;
   await sql`
     INSERT INTO meetup.member_courses (member_id, class_number)
-    VALUES (${memberId}, ${classNumber})
+    SELECT m.id, ${classNumber}
+    FROM meetup.members m
+    WHERE m.id = ${memberId} AND m.user_id IS NULL
     ON CONFLICT DO NOTHING
   `;
 }
 
+/** Removes it from every group in that term, which is the other half of sharing. */
 export async function removeMemberCourse(
   memberId: number,
   classNumber: string
 ): Promise<void> {
   const sql = getDb();
   await sql`
-    DELETE FROM meetup.member_courses
-    WHERE member_id = ${memberId} AND class_number = ${classNumber}
+    DELETE FROM meetup.user_courses uc
+    USING meetup.members m, meetup.groups g
+    WHERE m.id = ${memberId}
+      AND g.id = m.group_id
+      AND uc.user_id = m.user_id
+      AND uc.term = g.term
+      AND uc.class_number = ${classNumber}
+  `;
+  await sql`
+    DELETE FROM meetup.member_courses mc
+    USING meetup.members m
+    WHERE m.id = ${memberId}
+      AND m.user_id IS NULL
+      AND mc.member_id = m.id
+      AND mc.class_number = ${classNumber}
   `;
 }
 
+/** What this member row shows — the view decides which table that comes from. */
 export async function getMemberCourses(memberId: number): Promise<string[]> {
   const sql = getDb();
   const rows = await sql`
-    SELECT class_number FROM meetup.member_courses WHERE member_id = ${memberId}
+    SELECT class_number FROM meetup.member_courses_effective
+    WHERE member_id = ${memberId}
     ORDER BY class_number
   `;
   return rows.map((r) => r.class_number as string);

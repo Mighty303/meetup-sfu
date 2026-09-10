@@ -3,7 +3,7 @@
 import { signIn, useSession } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { ProfileBodySkeleton } from "@/components/Skeleton";
 import { ColorPicker } from "@/components/ColorPicker";
@@ -79,6 +79,22 @@ export default function ProfilePage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (authStatus === "authenticated") load(); }, [authStatus, load]);
+
+  /**
+   * Memberships bucketed by term, because that's what a schedule is keyed to.
+   * Two groups in one term share one timetable, so they get one picker between
+   * them rather than two that silently edit the same list. Whichever member row
+   * the picker writes through is immaterial — the write lands on the profile.
+   */
+  const byTerm = useMemo(() => {
+    const out = new Map<string, Membership[]>();
+    for (const m of data?.memberships ?? []) {
+      const list = out.get(m.group.term);
+      if (list) list.push(m);
+      else out.set(m.group.term, [m]);
+    }
+    return [...out.entries()];
+  }, [data]);
 
   function setError(memberId: number, message: string | null) {
     setErrors((cur) => {
@@ -336,6 +352,53 @@ export default function ProfilePage() {
           {notice && <p className="text-sm text-emerald-600">{notice}</p>}
 
           <section className="flex flex-col gap-3">
+            <div>
+              <h2 className="font-medium">Your schedule</h2>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                One schedule per term, shared by every group you&apos;re in that
+                term. Add a section once and it shows up in all of them — and
+                removing it here removes it everywhere.
+              </p>
+            </div>
+
+            {byTerm.length === 0 ? (
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                Join a group and your courses for its term go here.
+              </p>
+            ) : (
+              byTerm.map(([term, list]) => (
+                <article
+                  key={term}
+                  className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
+                >
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <h3 className="font-medium">{fromTermCode(term)}</h3>
+                    <span className="text-sm text-neutral-500">
+                      {list.length === 1
+                        ? list[0].group.name
+                        : `${list.length} groups · ${list.map((m) => m.group.name).join(", ")}`}
+                    </span>
+                    <span className="ml-auto text-sm text-neutral-500">
+                      {list[0].classNumbers.length > 0
+                        ? `${list[0].classNumbers.length} section${list[0].classNumbers.length === 1 ? "" : "s"} saved`
+                        : "nothing saved yet"}
+                    </span>
+                  </div>
+                  {/* Any of the term's member rows will do as the write target;
+                      they all resolve to the same profile schedule. */}
+                  <CoursePicker
+                    term={term}
+                    groupCode={list[0].group.code}
+                    memberId={list[0].memberId}
+                    classNumbers={list[0].classNumbers}
+                    onChange={load}
+                  />
+                </article>
+              ))
+            )}
+          </section>
+
+          <section className="flex flex-col gap-3">
             <h2 className="font-medium">
               Your groups
               <span className="ml-2 text-sm font-normal text-neutral-500">
@@ -369,11 +432,6 @@ export default function ProfilePage() {
                     <span className="text-sm text-neutral-500">
                       {fromTermCode(m.group.term)} · <span className="font-mono">{m.group.code}</span>
                     </span>
-                    <span className="ml-auto text-sm text-neutral-500">
-                      {m.classNumbers.length > 0
-                        ? `${m.classNumbers.length} section${m.classNumbers.length === 1 ? "" : "s"} saved`
-                        : "no schedule yet"}
-                    </span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -403,14 +461,6 @@ export default function ProfilePage() {
                       Save name
                     </button>
                   </form>
-
-                  <CoursePicker
-                    term={m.group.term}
-                    groupCode={m.group.code}
-                    memberId={m.memberId}
-                    classNumbers={m.classNumbers}
-                    onChange={load}
-                  />
 
                   <div className="flex flex-wrap items-center gap-3 text-xs">
                     {errors[m.memberId] && <p className="text-amber-600">{errors[m.memberId]}</p>}

@@ -4,8 +4,13 @@ import { useEffect, useState } from "react";
 import type { CourseHit, SectionHit } from "@/lib/sfu";
 
 interface Props {
-  /** Group term, e.g. "2026-fall" — searches are scoped to it. */
+  /** The term this schedule is for, e.g. "2026-fall" — searches are scoped to it. */
   term: string;
+  /**
+   * A member row of yours in a group of that term, and the group it's in. Only
+   * a route to the API: an add or remove lands on your profile schedule for the
+   * term, so which of your rows it travels through makes no difference.
+   */
   groupCode: string;
   memberId: number;
   /** Class numbers already saved, so the picker can mark and unmark them. */
