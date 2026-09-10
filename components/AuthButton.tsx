@@ -25,27 +25,17 @@ export function AuthButton({ stacked = false }: { stacked?: boolean }) {
   }
 
   if (stacked) {
-    // In the mobile menu the account block is just more menu rows: same
-    // padding and alignment as the nav links, so it doesn't read as a
-    // transplanted desktop control. Sign out isn't destructive — neutral
-    // until hover, and behind a divider so it isn't hit by accident.
+    // In the mobile menu this is just one more menu row. Who you're signed
+    // in as belongs on the Profile page the menu already links to, so the
+    // avatar and name would only repeat it. Sign out isn't destructive —
+    // neutral until hover, and behind a divider so it isn't hit by accident.
     return (
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-3 py-1.5">
-          {session.user.image && (
-            <Image src={session.user.image} alt="" width={28} height={28} className="rounded-full" />
-          )}
-          <span className="min-w-0 truncate text-sm text-neutral-600 dark:text-neutral-300">
-            {session.user.name ?? session.user.email}
-          </span>
-        </div>
-        <button
-          onClick={() => signOut()}
-          className="w-full rounded-lg px-3 py-1.5 text-left text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-red-600 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-red-400"
-        >
-          Sign out
-        </button>
-      </div>
+      <button
+        onClick={() => signOut()}
+        className="w-full rounded-lg px-3 py-1.5 text-left text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-red-600 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-red-400"
+      >
+        Sign out
+      </button>
     );
   }
 

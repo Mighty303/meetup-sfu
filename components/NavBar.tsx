@@ -6,42 +6,19 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AuthButton } from "./AuthButton";
 
-interface Membership {
-  code: string;
-  name: string;
-}
-
 export function NavBar() {
   return <Suspense fallback={<div className="h-16 border-b border-neutral-200 dark:border-neutral-800" />}><NavBarContent /></Suspense>;
 }
 
 function NavBarContent() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [recent, setRecent] = useState<(Membership & { userId: number }) | null>(null);
   const [open, setOpen] = useState(false);
-  const userId = session?.appUserId;
 
-  // "Schedule" has no fixed route — a schedule always belongs to a group. It
-  // points at the group you're looking at, or failing that your most recent one.
+  // Group schedules are reached from the home page, which lists them; the nav
+  // only needs the group you're already looking at, for the "My Schedule" link.
   const currentCode = pathname.startsWith("/g/") ? pathname.split("/")[2] : null;
-
-  useEffect(() => {
-    if (status !== "authenticated" || !userId || currentCode) return;
-    let cancelled = false;
-    fetch("/api/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.memberships?.length) return;
-        // /api/me nests the group under `group` — the flat fields are the
-        // member row, whose `name` is your display name, not the group's.
-        const m = data.memberships[0];
-        setRecent({ code: m.group.code, name: m.group.name, userId });
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [status, userId, currentCode]);
 
   const viewParam = searchParams.get("view");
 
@@ -52,18 +29,12 @@ function NavBarContent() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const scheduleCode = currentCode ?? (status === "authenticated" && recent?.userId === userId ? recent?.code : null);
   const signedIn = status === "authenticated";
   const mySchedule = pathname === "/my-schedule" || (!!currentCode && viewParam === "mine");
 
   const links = (
     <>
       <NavLink href="/" active={pathname === "/"}>Home</NavLink>
-      {scheduleCode && (
-        <NavLink href={`/g/${scheduleCode}`} active={!!currentCode && !mySchedule}>
-          Schedule
-        </NavLink>
-      )}
       {signedIn && (
         <NavLink
           href={currentCode ? `/g/${currentCode}?view=mine` : "/my-schedule"}
