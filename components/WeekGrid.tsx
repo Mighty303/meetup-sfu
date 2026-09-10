@@ -314,17 +314,27 @@ export function WeekGrid({
 
                   {/* Free windows sit behind the busy bands. Gaps between
                       classes are the ones worth spotting, so they carry the
-                      colour; the rest stay grey. */}
+                      colour; the rest stay grey.
+
+                      Inset and rounded exactly like a class block. A window is
+                      one more shape stacked in the column, and drawing it
+                      square and full-bleed between two rounded blocks read as a
+                      rendering fault rather than a distinction. Corners round on
+                      all four sides safely: commonFree returns *maximal*
+                      windows, so two of them can never abut — there is always a
+                      class in between, and never a seam to notch. */}
                   {dayFree.map((w, i) => {
                     const minutes = w.end - w.start;
                     const tone = freeStyle(w, solo);
                     return (
                       <div
                         key={`free-${i}`}
-                        className={`absolute inset-x-0 flex flex-col items-center justify-center gap-0.5 px-1 text-center ${tone.box}`}
+                        className={`absolute flex flex-col items-center justify-center gap-0.5 rounded-md px-1 text-center ${tone.box}`}
                         style={{
-                          top: `${pct(w.start)}%`,
-                          height: `${heightPct(minutes)}%`,
+                          top: `calc(${pct(w.start)}% + ${GAP_Y / 2}px)`,
+                          height: `calc(${heightPct(minutes)}% - ${GAP_Y}px)`,
+                          left: GAP_X / 2,
+                          right: GAP_X / 2,
                         }}
                         onMouseEnter={(e) =>
                           setHover({
