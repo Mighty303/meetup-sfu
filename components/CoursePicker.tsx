@@ -171,12 +171,28 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
       <p className="mt-1 text-xs font-medium text-neutral-500">Search SFU courses</p>
       {/* Typing searches; the only Add that means anything is the one beside a
           section, since a query like "cmpt 225" can't say which one you're in. */}
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="CMPT 225, MATH 151, calculus…"
-        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-      />
+      <div className="relative">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          aria-hidden
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+        >
+          <circle cx="9" cy="9" r="5.5" />
+          <path d="M13.2 13.2L17 17" />
+        </svg>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="CMPT 225, MATH 151, calculus…"
+          className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-3 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+        />
+      </div>
 
       {searchable && (
         <div className="max-h-72 overflow-y-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
