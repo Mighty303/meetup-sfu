@@ -17,7 +17,7 @@ function NavBarContent() {
   const [open, setOpen] = useState(false);
 
   // Group schedules are reached from the home page, which lists them; the nav
-  // only needs the group you're already looking at, for the "My Schedule" link.
+  // only needs the group you're already looking at, for the "Schedule" link.
   const currentCode = pathname.startsWith("/g/") ? pathname.split("/")[2] : null;
 
   const viewParam = searchParams.get("view");
@@ -32,7 +32,7 @@ function NavBarContent() {
   const signedIn = status === "authenticated";
   // Server-side flag, so the allowlist never ships in the client bundle.
   const isAdmin = signedIn && session?.isAdmin === true;
-  const mySchedule = pathname === "/my-schedule" || (!!currentCode && viewParam === "mine");
+  const schedule = pathname === "/my-schedule" || (!!currentCode && viewParam === "mine");
 
   const links = (
     <>
@@ -40,9 +40,9 @@ function NavBarContent() {
       {signedIn && (
         <NavLink
           href={currentCode ? `/g/${currentCode}?view=mine` : "/my-schedule"}
-          active={mySchedule}
+          active={schedule}
         >
-          My Schedule
+          Schedule
         </NavLink>
       )}
       {signedIn && (

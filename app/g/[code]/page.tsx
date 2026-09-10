@@ -24,6 +24,17 @@ interface Member {
   image: string | null;
 }
 
+/**
+ * One row of the group switcher: a group you have a member row in. A slice of
+ * what /api/me returns — the rest of that payload is the profile page's.
+ */
+interface GroupOption {
+  memberId: number;
+  /** Your colour in that group, so the dot matches its grid. */
+  color: string;
+  group: { code: string; name: string; term: string };
+}
+
 interface GroupState {
   group: {
     id: number;
@@ -129,6 +140,8 @@ function GroupSchedule({ code }: { code: string }) {
   // The group's own name, which only its admin can change. Null when nobody is
   // editing it; the string being edited otherwise, so "" is a real state.
   const [draftName, setDraftName] = useState<string | null>(null);
+  // Every group you're in, for the switcher. Null until the fetch lands.
+  const [myGroups, setMyGroups] = useState<GroupOption[] | null>(null);
 
   const load = useCallback(async () => {
     // No minMinutes here: the page derives its own windows from busyByMember, so
@@ -163,6 +176,31 @@ function GroupSchedule({ code }: { code: string }) {
     signedIn &&
     state?.group.ownerUserId != null &&
     state.group.ownerUserId === session?.appUserId;
+
+  // Your other groups, so switching between them doesn't mean a trip via Home.
+  // Independent of the group fetch: it's keyed on you, not on the code, so it
+  // survives navigating from one group to the next.
+  useEffect(() => {
+    if (!signedIn) return;
+    let live = true;
+    fetch("/api/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (live && data) setMyGroups(data.memberships); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [signedIn]);
+
+  /**
+   * Where one pill in the switcher points. The detailed/availability choice
+   * carries across; the week doesn't, because another group can be another term
+   * entirely, so it re-clamps from the server.
+   */
+  function pillHref(nextCode: string, nextView: "mine" | "everyone"): string {
+    const params = new URLSearchParams();
+    if (nextView === "mine") params.set("view", "mine");
+    if (grid === "heat") params.set("grid", "heat");
+    return `/g/${nextCode}${params.size > 0 ? `?${params}` : ""}`;
+  }
 
   function setGrid(next: "detailed" | "heat") {
     const params = new URLSearchParams(searchParams.toString());
@@ -294,7 +332,7 @@ function GroupSchedule({ code }: { code: string }) {
   if (view === "mine" && !signedIn) {
     return (
       <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-6">
-        <h1 className="text-2xl font-semibold tracking-tight">My Schedule</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Schedule</h1>
         <p className="text-sm text-neutral-500">Sign in to see your saved schedule.</p>
         <button
           onClick={() => signIn("google")}
@@ -367,8 +405,10 @@ function GroupSchedule({ code }: { code: string }) {
             </form>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">{view === "mine" ? "My Schedule" : state.group.name}</h1>
-              {isAdmin && view === "everyone" && (
+              {/* The group names the page in both views — the Group/Mine
+                  toggle below says which of the two you're reading. */}
+              <h1 className="text-2xl font-semibold tracking-tight">{state.group.name}</h1>
+              {isAdmin && (
                 <button
                   onClick={() => setDraftName(state.group.name)}
                   // Nothing spells out what this does any more, so the icon has
@@ -383,7 +423,6 @@ function GroupSchedule({ code }: { code: string }) {
             </div>
           )}
           <p className="text-sm text-neutral-500">
-            {view === "mine" && `${state.group.name} · `}
             {fromTermCode(state.group.term)} · code <span className="font-mono">{state.group.code}</span>
           </p>
           {view === "mine" && <p className="mt-1 text-sm text-neutral-500">Only your classes and free time are shown.</p>}
@@ -434,6 +473,34 @@ function GroupSchedule({ code }: { code: string }) {
           </div>
         </div>
       </header>
+
+      {/* What you're reading: your own week, or one of your groups as a whole.
+          One pill is selected at a time, and switching is a real navigation, so
+          these are links — middle-click and Back both behave. */}
+      {signedIn && (
+        <nav aria-label="Schedule to show" className="-mt-2 flex flex-wrap items-center gap-2">
+          <Pill href={pillHref(code, "mine")} current={view === "mine"} title="Only your classes and free time">
+            <Avatar src={me?.image ?? null} name={me?.displayName ?? "You"} color={me?.color} size={18} />
+            <span className="truncate">My schedule</span>
+          </Pill>
+          {/* A hairline, so "mine" doesn't read as just another group. */}
+          <span aria-hidden className="mx-0.5 h-5 w-px bg-neutral-300 dark:bg-neutral-700" />
+          {/* Until /api/me lands there's still the group you're on, so the row
+              renders at once and fills in rather than popping into place. */}
+          {(myGroups ?? [{ memberId: 0, color: me?.color ?? "#a3a3a3", group: state.group }]).map((g) => (
+            <Pill
+              key={g.group.code}
+              href={pillHref(g.group.code, "everyone")}
+              current={view === "everyone" && g.group.code === code}
+              title={`${g.group.name} · ${fromTermCode(g.group.term)}`}
+            >
+              {/* Your colour in that group — the same key its grid uses. */}
+              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: g.color }} />
+              <span className="truncate">{g.group.name}</span>
+            </Pill>
+          ))}
+        </nav>
+      )}
 
       {!signedIn ? (
         <div className="rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
@@ -891,6 +958,34 @@ function GroupSchedule({ code }: { code: string }) {
         </section>
       )}
     </main>
+  );
+}
+
+/** One option in the schedule switcher. Selected reads as filled, like the nav. */
+function Pill({
+  href,
+  current,
+  title,
+  children,
+}: {
+  href: string;
+  current: boolean;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={current ? "page" : undefined}
+      title={title}
+      className={`flex max-w-[14rem] items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+        current
+          ? "border-neutral-900 bg-neutral-900 font-medium text-white dark:border-white dark:bg-white dark:text-neutral-900"
+          : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }
 

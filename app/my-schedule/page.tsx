@@ -15,7 +15,7 @@ export default async function MySchedulePage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-6">
-      <h1 className="text-2xl font-semibold tracking-tight">My Schedule</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Schedule</h1>
       {session?.appUserId ? (
         <>
           <p className="text-sm text-neutral-500">
