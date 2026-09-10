@@ -931,7 +931,7 @@ function GroupSchedule({ code }: { code: string }) {
 
       {unscheduledMembers.length > 0 && (
         <section>
-          <h2 className="mb-1 font-medium">No meeting times</h2>
+          <h2 className="mb-1 font-medium">Async Classes</h2>
           <p className="mb-2 text-xs text-neutral-500">
             Online, async, co-op and independent study sections. They have no
             timetable slot, so they don&apos;t appear on the grid or affect the
