@@ -75,7 +75,7 @@ anything the browser sends. A signed-in visitor who isn't on the list gets a
 would become the allowlist of every clone of it; leave it unset and the portal
 is closed to everyone, including you.
 
-Set `ADMIN_GOOGLE_SUB` to the account id the portal prints to pin access to one
+Set `ADMIN_GOOGLE_SUB` to your `meetup.users.google_sub` to pin access to one
 Google account rather than an address. The nav link is driven by
 `session.isAdmin`, so the allowlist never reaches the client bundle.
 `/api/admin/metrics` returns the same figures as JSON, gated identically.

@@ -53,7 +53,6 @@ export default async function AdminPage() {
         <CacheSection metrics={m} />
         <CoursesSection metrics={m} />
       </div>
-      <SecuritySection googleSub={admin.googleSub} pinned={admin.subPinned} />
     </main>
   );
 }
@@ -476,32 +475,6 @@ function CoursesSection({ metrics: { topCourses } }: { metrics: AdminMetrics }) 
             </li>
           ))}
         </ul>
-      )}
-    </Panel>
-  );
-}
-
-/* ---------------------------------------------------------------- security */
-
-function SecuritySection({ googleSub, pinned }: { googleSub: string; pinned: boolean }) {
-  return (
-    <Panel title="Access">
-      <p className="text-sm text-neutral-500">
-        This page is gated server-side on the email attached to your Google account,
-        read from the database rather than from anything the browser sends. A forged
-        session would need <code className="font-mono text-xs">AUTH_SECRET</code> as
-        well as the account itself.
-      </p>
-      {pinned ? (
-        <p className="mt-2 text-sm text-emerald-600">
-          Pinned to your Google account id as well as your address.
-        </p>
-      ) : (
-        <p className="mt-2 text-sm text-neutral-500">
-          To lock it to this exact Google account and not merely the address, set{" "}
-          <code className="font-mono text-xs">ADMIN_GOOGLE_SUB</code> to{" "}
-          <code className="font-mono text-xs break-all">{googleSub}</code>.
-        </p>
       )}
     </Panel>
   );

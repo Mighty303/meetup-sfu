@@ -18,8 +18,8 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
 /**
  * Optional second lock. An email is only as good as the identity provider
  * behind it; Google's `sub` is the account itself and can never be reassigned.
- * Set ADMIN_GOOGLE_SUB once you know yours (the portal prints it) and the
- * address alone stops being enough.
+ * Set ADMIN_GOOGLE_SUB to your users row's google_sub and the address alone
+ * stops being enough.
  */
 const ADMIN_GOOGLE_SUB = process.env.ADMIN_GOOGLE_SUB?.trim() || null;
 
@@ -27,10 +27,6 @@ export interface AdminIdentity {
   userId: number;
   email: string;
   name: string | null;
-  /** Shown in the portal so it can be pasted into ADMIN_GOOGLE_SUB. */
-  googleSub: string;
-  /** True when ADMIN_GOOGLE_SUB is set and matched, not merely when set. */
-  subPinned: boolean;
 }
 
 /**
@@ -62,8 +58,6 @@ export async function adminFor(appUserId: number | null | undefined): Promise<Ad
     userId: row.id as number,
     email: row.email as string,
     name: (row.name as string | null) ?? null,
-    googleSub: row.google_sub as string,
-    subPinned: ADMIN_GOOGLE_SUB !== null,
   };
 }
 
