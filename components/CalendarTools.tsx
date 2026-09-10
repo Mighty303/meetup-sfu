@@ -2,7 +2,8 @@
 
 interface Props {
   groupCode: string;
-  memberId: number;
+  /** Null when you're not in this group: there's no timetable of yours to take. */
+  memberId: number | null;
   /** Monday of the week on screen — the free-window export follows the grid. */
   week: string | null;
 }
@@ -20,17 +21,19 @@ export function CalendarTools({ groupCode, memberId, week }: Props) {
     `/api/groups/${groupCode}/calendar` + (week ? `?week=${week}` : "");
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm text-neutral-500">Export</span>
-      <a
-        href={timetableHref}
-        className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-      >
-        My timetable (.ics)
-      </a>
+    <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+      <span className="text-neutral-500">Export</span>
+      {memberId !== null && (
+        <a
+          href={timetableHref}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        >
+          My timetable (.ics)
+        </a>
+      )}
       <a
         href={windowsHref}
-        className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        className="rounded-lg border border-neutral-300 px-3 py-1.5 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
       >
         This week&apos;s free windows (.ics)
       </a>

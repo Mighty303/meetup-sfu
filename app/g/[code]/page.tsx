@@ -580,8 +580,6 @@ function GroupSchedule({ code }: { code: string }) {
             it once. Changes here show up in all of them.
           </p>
 
-          <CalendarTools groupCode={code} memberId={me.id} week={week} />
-
           <div className="flex flex-wrap items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
             {confirmLeave ? (
@@ -827,6 +825,10 @@ function GroupSchedule({ code }: { code: string }) {
           previewColor={me?.color}
         />
       )}
+
+      {/* Under the grid, because "this week's free windows" means the week
+          on screen — the control belongs next to the thing it copies. */}
+      <CalendarTools groupCode={code} memberId={me?.id ?? null} week={week} />
 
       <section>
         <Collapsible
