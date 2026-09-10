@@ -3,7 +3,9 @@
 import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
 
-export function AuthButton() {
+// `stacked` is for the mobile menu, where the row has the whole panel width
+// to itself and the sign-out control reads better on its own line.
+export function AuthButton({ stacked = false }: { stacked?: boolean }) {
   const { data: session, status } = useSession();
   if (status === "loading") {
     return <div className="h-8 w-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />;
@@ -22,22 +24,26 @@ export function AuthButton() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      {session.user.image && (
-        <Image
-          src={session.user.image}
-          alt=""
-          width={28}
-          height={28}
-          className="rounded-full"
-        />
-      )}
-      <span className="max-w-[7rem] truncate text-sm text-neutral-600 sm:max-w-none dark:text-neutral-300">
-        {session.user.name ?? session.user.email}
-      </span>
+    <div className={stacked ? "flex flex-col items-start gap-3" : "flex items-center gap-2"}>
+      <div className="flex items-center gap-2">
+        {session.user.image && (
+          <Image
+            src={session.user.image}
+            alt=""
+            width={28}
+            height={28}
+            className="rounded-full"
+          />
+        )}
+        <span className={`truncate text-sm text-neutral-600 dark:text-neutral-300 ${stacked ? "" : "max-w-[7rem] sm:max-w-none"}`}>
+          {session.user.name ?? session.user.email}
+        </span>
+      </div>
       <button
         onClick={() => signOut()}
-        className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        className={`rounded-lg border border-neutral-300 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800 ${
+          stacked ? "px-3 py-1.5 text-sm" : "px-2.5 py-1 text-xs"
+        }`}
       >
         Sign out
       </button>

@@ -121,7 +121,7 @@ function NavBarContent() {
         >
           {links}
           <div className="mt-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
-            <AuthButton />
+            <AuthButton stacked />
           </div>
         </div>
       )}
