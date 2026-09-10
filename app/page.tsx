@@ -91,7 +91,7 @@ export default function Home() {
 
       {/* The pitch above, as something you can actually look at. Invented
           people on invented courses — see DemoAvailability. */}
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-5">
         <h2 className="text-center text-sm font-medium">What it looks like</h2>
         <DemoAvailability />
       </section>

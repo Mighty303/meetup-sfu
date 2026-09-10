@@ -131,7 +131,7 @@ export function DemoAvailability() {
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-6">
       {/* The group page's control, not a second one that merely resembles it. */}
       <div className="mx-auto flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
         {(["heat", "detailed"] as const).map((mode) => (
