@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { HeatGrid } from "@/components/HeatGrid";
-import type { BusyBlock } from "@/lib/overlap";
+import { WeekGrid } from "@/components/WeekGrid";
+import { commonFree, type BusyBlock } from "@/lib/overlap";
 import type { DayKey } from "@/lib/sfu";
 
 /**
- * A worked example of the availability grid for the home page, so the pitch
- * above it is something you can look at rather than take on faith.
+ * A worked example of the week for the home page, so the pitch above it is
+ * something you can look at rather than take on faith. Both readings sit behind
+ * the same toggle the group page uses: they answer different questions, and
+ * showing only one undersells the thing.
  *
  * The data is invented — four people who don't exist, on courses nobody is
  * enrolled in. It's deliberately not a real group: the page renders before you
@@ -19,6 +22,20 @@ import type { DayKey } from "@/lib/sfu";
 // hour was only ever a sliver of empty band above the first class.
 const DAY_START = 8 * 60 + 30;
 const DAY_END = 22 * 60;
+
+// What the group page counts as worth crossing campus for. Matched so the gaps
+// drawn here are the ones the real thing would draw.
+const MIN_MINUTES = 60;
+
+/**
+ * Half a real week's height — this is a look at the thing, not the thing, and
+ * full height would push everything under it off the screen.
+ *
+ * Both views get this same string, which is what keeps the page from jumping
+ * when you toggle. COLUMN_HEIGHT does that job everywhere else and is left
+ * alone deliberately: the real grids still want their full height.
+ */
+const DEMO_HEIGHT = "h-[420px] sm:h-[490px] lg:h-[540px]";
 
 // Palette entries from MEMBER_COLORS, written out rather than imported: that
 // module reaches for the database, which has no business in a static demo.
@@ -92,20 +109,67 @@ const SCHEDULES: Record<number, BusyBlock[]> = {
 };
 
 export function DemoAvailability() {
-  // Stable across renders, so the grid's own memos never recompute.
+  // Local state, not a URL param: this is a landing-page demo and has no
+  // business putting a query string on "/" or pulling in useSearchParams.
+  const [grid, setGrid] = useState<"heat" | "detailed">("heat");
+
+  // Stable across renders, so the grids' own memos never recompute.
   const busyByMember = useMemo(() => SCHEDULES, []);
 
+  // Derived from the same blocks the grids draw, with the same helper the group
+  // page uses. A hand-written window list would drift from the schedules above
+  // the first time anyone edited one.
+  const free = useMemo(
+    () =>
+      commonFree({
+        members: PEOPLE.map((p) => ({ name: p.displayName, busy: SCHEDULES[p.id] })),
+        dayStart: DAY_START,
+        dayEnd: DAY_END,
+        minMinutes: MIN_MINUTES,
+      }),
+    []
+  );
+
   return (
-    <HeatGrid
-      members={PEOPLE}
-      busyByMember={busyByMember}
-      dayStart={DAY_START}
-      dayEnd={DAY_END}
-      // Shorter than a real week. This is a look at the thing, not the thing —
-      // full height would push everything under it off the screen.
-      columnHeight="h-[420px] sm:h-[490px] lg:h-[540px]"
-      // No weekStart on purpose: the "now" line belongs to a real week, and a
-      // demo that draws today's time on an invented week is just confusing.
-    />
+    <div className="flex flex-col gap-2">
+      {/* The group page's control, not a second one that merely resembles it. */}
+      <div className="mx-auto flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
+        {(["heat", "detailed"] as const).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setGrid(mode)}
+            aria-pressed={grid === mode}
+            className={`px-3 py-1.5 transition-colors ${
+              grid === mode
+                ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900"
+                : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            }`}
+          >
+            {mode === "detailed" ? "Detailed" : "Availability"}
+          </button>
+        ))}
+      </div>
+
+      {/* No weekStart on either: the "now" line belongs to a real week, and a
+          demo that draws today's time on an invented one is just confusing. */}
+      {grid === "heat" ? (
+        <HeatGrid
+          members={PEOPLE}
+          busyByMember={busyByMember}
+          dayStart={DAY_START}
+          dayEnd={DAY_END}
+          columnHeight={DEMO_HEIGHT}
+        />
+      ) : (
+        <WeekGrid
+          members={PEOPLE}
+          busyByMember={busyByMember}
+          free={free}
+          dayStart={DAY_START}
+          dayEnd={DAY_END}
+          columnHeight={DEMO_HEIGHT}
+        />
+      )}
+    </div>
   );
 }

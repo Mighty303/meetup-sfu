@@ -192,6 +192,13 @@ interface Props {
   preview?: BusyBlock[];
   /** Whose it would be — the preview borrows their colour. */
   previewColor?: string;
+  /**
+   * Height of the day columns. Defaults to the shared COLUMN_HEIGHT, which is
+   * what keeps this and the heatmap the same size behind their toggle — only
+   * pass something else where the two are swapped against each other outside
+   * the group page, like the home page demo, and pass HeatGrid the same value.
+   */
+  columnHeight?: string;
 }
 
 export function WeekGrid({
@@ -204,6 +211,7 @@ export function WeekGrid({
   weekStart,
   preview = [],
   previewColor = "#737373",
+  columnHeight = COLUMN_HEIGHT,
 }: Props) {
   // Tracked in state rather than a CSS-only tooltip: the day columns clip their
   // overflow, so an in-flow tooltip would be cut off at the column edge. A
@@ -280,7 +288,7 @@ export function WeekGrid({
             labels line up with the grid lines instead of sitting a row high. */}
         <div className="w-12 shrink-0">
           <div className="mb-1 text-center font-medium" aria-hidden>&nbsp;</div>
-          <div className={`relative ${COLUMN_HEIGHT}`}>
+          <div className={`relative ${columnHeight}`}>
             {hours.map((h) => (
               <div
                 key={h}
@@ -302,7 +310,7 @@ export function WeekGrid({
                   {LABELS[day]}
                 </div>
                 <div
-                  className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 ${COLUMN_HEIGHT}`}
+                  className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 ${columnHeight}`}
                 >
                   {hours.map((h) => (
                     <div
