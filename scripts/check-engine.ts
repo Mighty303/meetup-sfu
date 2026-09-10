@@ -12,7 +12,6 @@ import {
 import {
   fetchTermSections,
   indexByClassNumber,
-  parseScheduleInput,
   formatTime,
   toMinutes,
 } from "../lib/sfu";
@@ -43,16 +42,6 @@ assert.deepEqual(
   intersectAll([[{ start: 0, end: 100 }], [{ start: 40, end: 90 }], [{ start: 50, end: 200 }]]),
   [{ start: 50, end: 90 }]
 );
-
-// --- input parsing ----------------------------------------------------------
-assert.deepEqual(
-  parseScheduleInput("https://sfucourses.com/schedule?courses=5446-5447-6127&term=fall"),
-  ["5446", "5447", "6127"],
-  "class numbers pulled from a real share link"
-);
-assert.deepEqual(parseScheduleInput("5446, 5447 6127"), ["5446", "5447", "6127"]);
-assert.deepEqual(parseScheduleInput("5446-5446"), ["5446"], "duplicates collapse");
-assert.deepEqual(parseScheduleInput("https://sfucourses.com/schedule"), []);
 
 // --- against the live API ---------------------------------------------------
 const term = "2025-fall";

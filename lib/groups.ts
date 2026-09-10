@@ -214,21 +214,6 @@ export async function canEditMember(
   return owner === null || owner === appUserId;
 }
 
-export async function setMemberCourses(
-  memberId: number,
-  classNumbers: string[]
-): Promise<void> {
-  const sql = getDb();
-  await sql`DELETE FROM meetup.member_courses WHERE member_id = ${memberId}`;
-  if (classNumbers.length === 0) return;
-  // One statement, one round trip — neon-http has no transactions for loops.
-  await sql`
-    INSERT INTO meetup.member_courses (member_id, class_number)
-    SELECT ${memberId}, UNNEST(${classNumbers}::text[])
-    ON CONFLICT DO NOTHING
-  `;
-}
-
 /**
  * Leaving hands the group over. An admin who isn't in the group any more can
  * still delete it, and nobody left inside could — so ownership follows the

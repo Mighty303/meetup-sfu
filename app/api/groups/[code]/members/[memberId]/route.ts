@@ -4,28 +4,8 @@ import {
   removeMember,
   renameMember,
   setMemberColor,
-  setMemberCourses,
 } from "@/lib/groups";
 import { authorizeMember } from "@/lib/member-access";
-import { parseScheduleInput } from "@/lib/sfu";
-
-export async function PUT(
-  req: Request,
-  { params }: { params: Promise<{ code: string; memberId: string }> }
-) {
-  const { code, memberId } = await params;
-  const access = await authorizeMember(code, memberId);
-  if ("error" in access) return NextResponse.json({ error: access.error }, { status: access.status });
-
-  const { input } = await req.json().catch(() => ({}));
-  if (typeof input !== "string") {
-    return NextResponse.json({ error: "input is required" }, { status: 400 });
-  }
-
-  const classNumbers = parseScheduleInput(input);
-  await setMemberCourses(access.id, classNumbers);
-  return NextResponse.json({ classNumbers });
-}
 
 export async function PATCH(
   req: Request,

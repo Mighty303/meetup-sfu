@@ -91,29 +91,6 @@ export async function fetchTermSections(
   return res.json();
 }
 
-/**
- * Pull class numbers out of whatever a friend pastes: a full sfucourses.com
- * schedule link (?courses=5446-5447-6127), the bare dash-joined list, or a
- * comma/space separated list they typed by hand.
- */
-export function parseScheduleInput(input: string): string[] {
-  let raw = input.trim();
-
-  try {
-    const url = new URL(raw);
-    raw = url.searchParams.get("courses") ?? "";
-  } catch {
-    // Not a URL — treat the whole string as the list.
-  }
-
-  const seen = new Set<string>();
-  for (const part of raw.split(/[-,\s]+/)) {
-    const n = part.trim();
-    if (/^\d{3,6}$/.test(n)) seen.add(n);
-  }
-  return [...seen];
-}
-
 /** Index a term dump by class number so lookups are O(1) per saved course. */
 export function indexByClassNumber(
   courses: CourseWithSections[]
@@ -135,20 +112,6 @@ export function currentTermCode(date = new Date()): string {
   const month = date.getMonth(); // 0-indexed
   const season = month <= 3 ? "spring" : month <= 7 ? "summer" : "fall";
   return `${date.getFullYear()}-${season}`;
-}
-
-/**
- * Link to the sfucourses.com schedule builder, pre-set to a term.
- *
- * That page encodes the term as fa/sp/su + a 2-digit year, and only honours it
- * for the current and next term — anything older falls back to its default,
- * which is harmless since the link is just a starting point.
- */
-export function scheduleBuilderUrl(termCode: string): string {
-  const [year, season] = termCode.split("-");
-  const short: Record<string, string> = { spring: "sp", summer: "su", fall: "fa" };
-  const param = short[season] ? `${short[season]}${year.slice(-2)}` : "";
-  return `https://sfucourses.com/schedule${param ? `?term=${param}` : ""}`;
 }
 
 /**

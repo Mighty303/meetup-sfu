@@ -11,7 +11,7 @@ import { GroupPageSkeleton } from "@/components/Skeleton";
 import { WeekGrid } from "@/components/WeekGrid";
 import { blocksFromSection, commonFree, partialFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
-import { WEEKDAYS, formatTime, fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
+import { WEEKDAYS, formatTime, fromTermCode } from "@/lib/sfu";
 import type { SectionHit } from "@/lib/sfu";
 
 interface Member {
@@ -417,19 +417,11 @@ function GroupSchedule({ code }: { code: string }) {
       </header>
 
       {!signedIn ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
+        <div className="rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
           <p className="text-neutral-600 dark:text-neutral-300">
             Sign in with Google to add your schedule — you can view the group
-            without it. Build your schedule first and it&apos;ll be ready to paste.
+            without it.
           </p>
-          <a
-            href={scheduleBuilderUrl(state.group.term)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-          >
-            Build it on sfucourses.com ↗
-          </a>
         </div>
       ) : !me ? (
         <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
@@ -470,14 +462,6 @@ function GroupSchedule({ code }: { code: string }) {
             >
               {saving ? "Joining…" : unclaimed.length > 0 ? "None of these — add me" : "Join group"}
             </button>
-            <a
-              href={scheduleBuilderUrl(state.group.term)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-            >
-              Build it on sfucourses.com ↗
-            </a>
             {error && <p className="text-sm text-amber-600">{error}</p>}
           </div>
         </div>
@@ -490,8 +474,6 @@ function GroupSchedule({ code }: { code: string }) {
             <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
           </div>
 
-          {/* Search the term's course list directly — no round trip through
-              the builder for people who just want to add one class. */}
           <CoursePicker
             term={state.group.term}
             groupCode={code}

@@ -9,11 +9,8 @@ Course data comes from the public [sfucourses API](https://api.sfucourses.com)
 (`/v1/rest/sections?term=2025-fall`) — no key, open CORS. **This repo does not
 fork sfucourses.com**, it only consumes that endpoint.
 
-The import path is the useful trick: build a schedule on
-[sfucourses.com/schedule](https://sfucourses.com/schedule), copy the link, paste
-it in. That URL encodes selections as dash-joined class numbers
-(`?courses=5446-5447`), so pasting it is a full schedule import. Typed class
-numbers work too.
+Sections are added in-app: search the term's course list and add each one you're
+in. Tutorials and labs are their own class numbers, so each is added separately.
 
 Only class numbers are persisted. Meeting times are always resolved against the
 API at read time, so an upstream schedule change is picked up without a migration.
