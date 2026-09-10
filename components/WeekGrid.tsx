@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { HoverCard, type HoverCardData } from "@/components/HoverCard";
+import { COLUMN_HEIGHT } from "@/lib/grid-layout";
 import type { BusyBlock, FreeWindow } from "@/lib/overlap";
 import { formatTime, WEEKDAYS, type DayKey } from "@/lib/sfu";
 
@@ -13,8 +15,6 @@ const LABELS: Record<DayKey, string> = {
 // constant at every column height, instead of scaling with the class length.
 const GAP_Y = 2;
 const GAP_X = 3;
-
-const COLUMN_HEIGHT = "h-[520px] sm:h-[660px] lg:h-[780px] xl:h-[880px]";
 
 /**
  * A gap between classes is the window worth meeting in — everyone is already on
@@ -63,15 +63,6 @@ function formatDuration(minutes: number): string {
   const m = minutes % 60;
   if (h === 0) return `${m}m`;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
-
-interface HoverCard {
-  title: string;
-  subtitle?: string;
-  lines: string[];
-  accent: string;
-  x: number;
-  y: number;
 }
 
 export interface Member {
@@ -213,7 +204,7 @@ export function WeekGrid({
   // Tracked in state rather than a CSS-only tooltip: the day columns clip their
   // overflow, so an in-flow tooltip would be cut off at the column edge. A
   // fixed-position card follows the cursor and escapes the clipping entirely.
-  const [hover, setHover] = useState<HoverCard | null>(null);
+  const [hover, setHover] = useState<HoverCardData | null>(null);
 
   const span = dayEnd - dayStart;
   const pct = (mins: number) => ((mins - dayStart) / span) * 100;
@@ -467,32 +458,7 @@ export function WeekGrid({
         </div>
       </div>
 
-      {hover && (
-        <div
-          // Fixed so it escapes the columns' overflow clipping. Offset from the
-          // cursor, and flipped left near the right edge so it stays on screen.
-          className="pointer-events-none fixed z-50 w-max max-w-[240px] rounded-lg border border-neutral-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95"
-          style={{
-            left: Math.min(hover.x + 14, (typeof window !== "undefined" ? window.innerWidth : 1200) - 260),
-            top: hover.y + 14,
-          }}
-        >
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: hover.accent }} />
-            <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-              {hover.title}
-            </span>
-            {hover.subtitle && (
-              <span className="text-xs text-neutral-500">{hover.subtitle}</span>
-            )}
-          </div>
-          {hover.lines.map((line, i) => (
-            <div key={i} className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-300">
-              {line}
-            </div>
-          ))}
-        </div>
-      )}
+      {hover && <HoverCard card={hover} />}
     </div>
   );
 }

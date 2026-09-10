@@ -4,6 +4,8 @@
  * signed-out button placeholder in AuthButton.
  */
 
+import { COLUMN_HEIGHT } from "@/lib/grid-layout";
+
 /** One grey bar. Sizing comes from the caller — this only carries the tone. */
 export function Bar({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
   return <div style={style} className={`rounded bg-neutral-200 dark:bg-neutral-800 ${className}`} />;
@@ -13,10 +15,6 @@ export function Bar({ className = "", style }: { className?: string; style?: Rea
 export function Dot({ className = "" }: { className?: string }) {
   return <div className={`rounded-full bg-neutral-200 dark:bg-neutral-800 ${className}`} />;
 }
-
-// Same column height as WeekGrid, so the grid lands exactly where the
-// placeholder was and nothing below it shifts.
-const COLUMN_HEIGHT = "h-[520px] sm:h-[660px] lg:h-[780px] xl:h-[880px]";
 
 const HOUR_LINES = Array.from({ length: 15 }, (_, i) => (i / 14) * 100);
 

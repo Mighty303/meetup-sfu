@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { CoursePicker } from "@/components/CoursePicker";
+import { HeatGrid } from "@/components/HeatGrid";
 import { GroupPageSkeleton } from "@/components/Skeleton";
 import { WeekGrid } from "@/components/WeekGrid";
 import { blocksFromSection, commonFree, partialFree } from "@/lib/overlap";
@@ -111,6 +112,10 @@ function GroupSchedule({ code }: { code: string }) {
   // "mine" narrows the whole page to your own row: your classes at full width
   // and your own gaps, without everyone else's blocks to read past.
   const view = searchParams.get("view") === "mine" ? "mine" : "everyone";
+  // "heat" swaps the labelled blocks for a LettuceMeet-style shading of how
+  // many people are free in each half-hour. In the URL so a reload — and a
+  // shared link — keeps whichever view you were reading.
+  const grid = searchParams.get("grid") === "heat" ? "heat" : "detailed";
   const [showAllPartial, setShowAllPartial] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -158,6 +163,14 @@ function GroupSchedule({ code }: { code: string }) {
     signedIn &&
     state?.group.ownerUserId != null &&
     state.group.ownerUserId === session?.appUserId;
+
+  function setGrid(next: "detailed" | "heat") {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "heat") params.set("grid", "heat");
+    else params.delete("grid");
+    // replace, not push: toggling a view isn't a step you want to hit Back through.
+    router.replace(`/g/${code}${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
+  }
 
   async function claim(memberId: number) {
     setSaving(true);
@@ -683,6 +696,26 @@ function GroupSchedule({ code }: { code: string }) {
             This week
           </button>
         )}
+
+        {/* Two readings of the same week. Detailed keeps the labelled blocks;
+            availability shades each half-hour by how many people are free,
+            which is the only view that survives five clashing schedules. */}
+        <div className="ml-1 flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
+          {(["detailed", "heat"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setGrid(mode)}
+              aria-pressed={grid === mode}
+              className={`px-3 py-1.5 transition-colors ${
+                grid === mode
+                  ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900"
+                  : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              }`}
+            >
+              {mode === "detailed" ? "Detailed" : "Availability"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {view === "mine" && shown.length === 0 && (
@@ -693,16 +726,26 @@ function GroupSchedule({ code }: { code: string }) {
         </p>
       )}
 
-      <WeekGrid
-        members={shown}
-        busyByMember={state.busyByMember}
-        free={free}
-        dayStart={DAY_START}
-        dayEnd={DAY_END}
-        solo={view === "mine"}
-        preview={previewBlocks}
-        previewColor={me?.color}
-      />
+      {grid === "heat" ? (
+        <HeatGrid
+          members={shown}
+          busyByMember={state.busyByMember}
+          dayStart={DAY_START}
+          dayEnd={DAY_END}
+          solo={view === "mine"}
+        />
+      ) : (
+        <WeekGrid
+          members={shown}
+          busyByMember={state.busyByMember}
+          free={free}
+          dayStart={DAY_START}
+          dayEnd={DAY_END}
+          solo={view === "mine"}
+          preview={previewBlocks}
+          previewColor={me?.color}
+        />
+      )}
 
       <section>
         <h2 className="mb-1 font-medium">{view === "mine" ? "Your gaps between classes" : "Gaps between classes"}</h2>

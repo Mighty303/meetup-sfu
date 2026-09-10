@@ -423,6 +423,115 @@ export function partialFree({
   return windows;
 }
 
+export interface Slot extends Interval {
+  day: DayKey;
+  /**
+   * Indices into the members array, not names — the caller holds the colours
+   * and avatars, and re-deriving a member from a name would break on two
+   * people called Alex.
+   */
+  freeIndices: number[];
+  busyIndices: number[];
+  /** Campuses the free members are anchored to around this slot. */
+  campuses: string[];
+  sharedCampus: boolean;
+  /**
+   * Nobody free here is making the trip specially: every one of them has a
+   * class on either side of this slot that day, and at least one of them still
+   * has a class to come — so the slot sits inside the group's day rather than
+   * after it. Per-member, unlike `FreeWindow.betweenClasses`, which only asks
+   * whether *some* block abuts the window edge.
+   */
+  betweenClasses: boolean;
+}
+
+export interface AvailabilityOptions {
+  members: MemberSchedule[];
+  dayStart: number;
+  dayEnd: number;
+  /** Row height in minutes — 30 lines up with SFU's :30–:20 sections. */
+  slotMinutes: number;
+  days?: readonly DayKey[];
+}
+
+/**
+ * How many people are free in every slot of the week, for the heatmap view.
+ *
+ * `commonFree` answers "when is *everyone* free", which with five schedules is
+ * often nowhere. This answers the weaker, more useful question — how many, at
+ * what time — and lets the shading carry the count.
+ *
+ * Returns one row per slot, each row holding one entry per day, which is the
+ * order the grid renders in.
+ */
+export function availabilityGrid({
+  members,
+  dayStart,
+  dayEnd,
+  slotMinutes,
+  days = WEEKDAYS,
+}: AvailabilityOptions): Slot[][] {
+  const rows: Slot[][] = [];
+
+  // Precomputed per day so the inner loop isn't re-filtering every member's
+  // whole week for each of the ~28 slots.
+  const busyByDay = new Map<DayKey, BusyBlock[][]>(
+    days.map((day) => [day, members.map((m) => m.busy.filter((b) => b.day === day))])
+  );
+
+  for (let start = dayStart; start + slotMinutes <= dayEnd; start += slotMinutes) {
+    const end = start + slotMinutes;
+    const row: Slot[] = [];
+
+    for (const day of days) {
+      const dayBusy = busyByDay.get(day)!;
+      const freeIndices: number[] = [];
+      const busyIndices: number[] = [];
+
+      dayBusy.forEach((busy, i) => {
+        // Overlap, not containment: a 9:30–10:20 class makes the 10:00 slot
+        // busy. Erring toward busy never proposes a slot someone has to walk
+        // out of halfway through.
+        if (busy.some((b) => b.start < end && b.end > start)) busyIndices.push(i);
+        else freeIndices.push(i);
+      });
+
+      const campuses = [
+        ...new Set(
+          freeIndices
+            .map((i) => anchorCampus(dayBusy[i], { start, end }))
+            .filter((c): c is string => c !== null)
+        ),
+      ];
+
+      row.push({
+        day,
+        start,
+        end,
+        freeIndices,
+        busyIndices,
+        campuses,
+        sharedCampus: campuses.length <= 1,
+        betweenClasses:
+          freeIndices.length > 0 &&
+          // Requiring a class both before *and* after for every single person
+          // is a bar almost no slot clears once the group passes three people —
+          // one of them always has an empty morning. Either side is enough to
+          // mean they're on campus anyway.
+          freeIndices.every((i) =>
+            dayBusy[i].some((b) => b.end <= start || b.start >= end)
+          ) &&
+          // ...but someone has to still have a class to come, or this is just
+          // "after everyone's last class", which is a different proposition.
+          freeIndices.some((i) => dayBusy[i].some((b) => b.start >= end)),
+      });
+    }
+    rows.push(row);
+  }
+
+  return rows;
+}
+
 export interface TermBounds {
   start: string;
   end: string;
