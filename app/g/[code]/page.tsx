@@ -3,10 +3,9 @@
 import { signIn, useSession } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
-import { ColorPicker } from "@/components/ColorPicker";
 import { CoursePicker } from "@/components/CoursePicker";
 import { WeekGrid } from "@/components/WeekGrid";
 import { blocksFromSection, commonFree, partialFree } from "@/lib/overlap";
@@ -24,7 +23,14 @@ interface Member {
 }
 
 interface GroupState {
-  group: { id: number; code: string; name: string; term: string };
+  group: {
+    id: number;
+    code: string;
+    name: string;
+    term: string;
+    /** The group's admin — the only person who can delete it. */
+    ownerUserId: number | null;
+  };
   members: Member[];
   busyByMember: Record<number, BusyBlock[]>;
   free: FreeWindow[];
@@ -91,6 +97,7 @@ export default function GroupPage({ params }: { params: Promise<{ code: string }
 
 function GroupSchedule({ code }: { code: string }) {
   const { data: session, status: authStatus } = useSession();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [state, setState] = useState<GroupState | null>(null);
@@ -104,12 +111,13 @@ function GroupSchedule({ code }: { code: string }) {
   // and your own gaps, without everyone else's blocks to read past.
   const view = searchParams.get("view") === "mine" ? "mine" : "everyone";
   const [showAllPartial, setShowAllPartial] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   // The section under the cursor in the picker, sketched onto the grid.
   const [preview, setPreview] = useState<{ course: string; section: SectionHit } | null>(null);
+  // Deleting is irreversible and takes everyone's schedules, so the button has
+  // to be armed first — no dialog, just a second, differently-worded click.
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const load = useCallback(async () => {
     // No minMinutes here: the page derives its own windows from busyByMember, so
@@ -138,6 +146,12 @@ function GroupSchedule({ code }: { code: string }) {
   const me = signedIn ? state?.members.find((m) => m.userId === session?.appUserId) ?? null : null;
   // Rows with no owner: claimable by whoever signs in and says that's them.
   const unclaimed = state?.members.filter((m) => m.userId === null) ?? [];
+  // The group's admin: whoever created it. The server checks this again on the
+  // delete itself — this only decides whether the button is worth showing.
+  const isAdmin =
+    signedIn &&
+    state?.group.ownerUserId != null &&
+    state.group.ownerUserId === session?.appUserId;
 
   async function claim(memberId: number) {
     setSaving(true);
@@ -157,42 +171,25 @@ function GroupSchedule({ code }: { code: string }) {
     load();
   }
 
-  async function saveColor(color: string) {
-    if (!me || color === me.color) return;
-    setSaving(true);
-    const res = await fetch(`/api/groups/${code}/members/${me.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ color }),
-    });
-    setSaving(false);
-    if (!res.ok) { setError((await res.json()).error); return; }
-    setError(null);
-    load();
-  }
-
-  async function saveName(e: React.FormEvent) {
-    e.preventDefault();
-    if (!me || !newName.trim()) return;
-    setSaving(true);
-    const res = await fetch(`/api/groups/${code}/members/${me.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName: newName }),
-    });
-    setSaving(false);
-    if (!res.ok) { setError((await res.json()).error); return; }
-    setError(null);
-    setRenaming(false);
-    load();
-  }
-
   async function leave() {
     if (!me) return;
     setSaving(true);
     await fetch(`/api/groups/${code}/members/${me.id}`, { method: "DELETE" });
     setSaving(false);
     load();
+  }
+
+  async function deleteGroup() {
+    setSaving(true);
+    const res = await fetch(`/api/groups/${code}`, { method: "DELETE" });
+    setSaving(false);
+    if (!res.ok) {
+      setConfirmDelete(false);
+      setError((await res.json()).error ?? "could not delete this group");
+      return;
+    }
+    // Nothing left at this URL to reload.
+    router.push("/");
   }
 
   // Only people with a schedule can constrain anything — someone who hasn't
@@ -336,8 +333,29 @@ function GroupSchedule({ code }: { code: string }) {
                 setTimeout(() => setCopyState("idle"), 2000);
                 navigator.clipboard?.writeText(shareUrl).catch(() => setCopyState("failed"));
               }}
-              className="shrink-0 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
             >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+                className="shrink-0 text-neutral-500 dark:text-neutral-400"
+              >
+                {copyState === "copied" ? (
+                  <path d="M4.5 10.5l3.5 3.5 7.5-8" />
+                ) : (
+                  <>
+                    <rect x="7.25" y="7.25" width="9" height="9" rx="2" />
+                    <path d="M12.75 4.75a2 2 0 00-2-2h-6a2 2 0 00-2 2v6a2 2 0 002 2" />
+                  </>
+                )}
+              </svg>
               {copyState === "copied" ? "Copied" : copyState === "failed" ? "Select & copy ↑" : "Copy link"}
             </button>
           </div>
@@ -411,58 +429,11 @@ function GroupSchedule({ code }: { code: string }) {
         </div>
       ) : (
         <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {renaming ? (
-              <form onSubmit={saveName} className="flex flex-wrap items-center gap-2">
-                <input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder={me.displayName}
-                  autoFocus
-                  maxLength={60}
-                  className="rounded-lg border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-                />
-                <button disabled={saving} className="rounded-lg bg-neutral-900 px-3 py-1 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
-                  Save
-                </button>
-                <button type="button" onClick={() => setRenaming(false)} className="text-sm text-neutral-500">
-                  Cancel
-                </button>
-              </form>
-            ) : (
-              <div className="flex items-center gap-2 text-sm">
-                <Avatar src={me.image} name={me.displayName} color={me.color} size={24} />
-                <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
-                <button
-                  onClick={() => { setNewName(me.displayName); setRenaming(true); }}
-                  className="text-xs text-neutral-500 underline-offset-2 hover:underline"
-                >
-                  Rename
-                </button>
-                <span className="text-neutral-500">
-                  {me.classNumbers.length > 0
-                    ? `· ${me.classNumbers.length} section${me.classNumbers.length === 1 ? "" : "s"} saved`
-                    : "· no schedule yet"}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Right next to the grid it applies to — the whole point of changing
-              it is that your blocks are hard to pick out, and you can see that
-              happen here. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-xs text-neutral-500">Your colour</span>
-            <ColorPicker
-              value={me.color}
-              taken={Object.fromEntries(
-                state.members
-                  .filter((m) => m.id !== me.id)
-                  .map((m) => [m.color, m.displayName])
-              )}
-              disabled={saving}
-              onPick={saveColor}
-            />
+          {/* Name and colour are set once on the profile page — they follow you
+              into every group, so there's nothing to edit here. */}
+          <div className="flex items-center gap-2 text-sm">
+            <Avatar src={me.image} name={me.displayName} color={me.color} size={24} />
+            <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
           </div>
 
           {/* Search the term's course list directly — no round trip through
@@ -476,7 +447,7 @@ function GroupSchedule({ code }: { code: string }) {
             onPreview={setPreview}
           />
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
             <button
               onClick={leave}
@@ -485,6 +456,33 @@ function GroupSchedule({ code }: { code: string }) {
             >
               Leave group
             </button>
+            {isAdmin && (
+              confirmDelete ? (
+                <span className="flex items-center gap-2 text-xs">
+                  <span className="text-neutral-600 dark:text-neutral-300">
+                    Delete {state.group.name} and everyone&apos;s schedules in it?
+                  </span>
+                  <button
+                    onClick={deleteGroup}
+                    disabled={saving}
+                    className="rounded-lg bg-red-600 px-2 py-1 font-medium text-white disabled:opacity-50"
+                  >
+                    {saving ? "Deleting…" : "Delete for everyone"}
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)} className="text-neutral-500">
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={saving}
+                  className="text-xs text-neutral-500 underline-offset-2 hover:text-red-600 hover:underline"
+                >
+                  Delete group
+                </button>
+              )
+            )}
           </div>
         </div>
       )}
@@ -551,6 +549,14 @@ function GroupSchedule({ code }: { code: string }) {
                   <span className="truncate font-medium" style={{ color: m.color }}>
                     {m.displayName}
                   </span>
+                  {m.userId !== null && m.userId === state.group.ownerUserId && (
+                    <span
+                      title="Created this group"
+                      className="shrink-0 rounded border border-neutral-300 px-1 text-[10px] uppercase tracking-wide text-neutral-500 dark:border-neutral-700"
+                    >
+                      Admin
+                    </span>
+                  )}
                   <span className="ml-auto shrink-0 text-xs text-neutral-500">
                     {!hasSchedule
                       ? "no schedule yet"

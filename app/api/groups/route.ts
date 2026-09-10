@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { createGroup } from "@/lib/groups";
 import { currentTermCode } from "@/lib/sfu";
 
@@ -7,11 +8,15 @@ export async function POST(req: Request) {
   if (typeof name !== "string" || name.trim().length === 0) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
+  // Creating signed out still works; the group then has no admin until the
+  // first member joins and adopts it.
+  const session = await auth();
   const group = await createGroup(
     name.trim().slice(0, 120),
     typeof term === "string" && /^\d{4}-(spring|summer|fall)$/.test(term)
       ? term
-      : currentTermCode()
+      : currentTermCode(),
+    session?.appUserId ?? null
   );
   return NextResponse.json(group, { status: 201 });
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { findGroup, getGroupState } from "@/lib/groups";
+import { auth } from "@/auth";
+import { deleteGroup, findGroup, getGroupState, isGroupOwner } from "@/lib/groups";
 import { toMinutes } from "@/lib/sfu";
 
 export async function GET(
@@ -21,4 +22,30 @@ export async function GET(
     minMinutes: Number(q.get("minMinutes") ?? 60),
   });
   return NextResponse.json(state);
+}
+
+/**
+ * Deleting takes every member's schedule with it, so it's the group admin's
+ * alone — the person who created it. Members leave; only the admin can end it.
+ */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ code: string }> }
+) {
+  const { code } = await params;
+  const group = await findGroup(code.toUpperCase());
+  if (!group) {
+    return NextResponse.json({ error: "group not found" }, { status: 404 });
+  }
+
+  const session = await auth();
+  if (!(await isGroupOwner(group.id, session?.appUserId ?? null))) {
+    return NextResponse.json(
+      { error: "only the group admin can delete this group" },
+      { status: 403 }
+    );
+  }
+
+  await deleteGroup(group.id);
+  return new NextResponse(null, { status: 204 });
 }

@@ -106,3 +106,89 @@ await sql`DELETE FROM meetup.groups WHERE id = ${g2.id}`;
 await sql`DELETE FROM meetup.users WHERE id IN (${carol.id}, ${dave.id})`;
 
 console.log("ALL CLAIM CHECKS PASSED");
+
+// --- group admin ------------------------------------------------------------
+// The creator owns the group; only they may delete it. A group created signed
+// out is adopted by the first member to join.
+async function isOwner(groupId, userId) {
+  if (!userId) return false;
+  const rows = await sql`
+    SELECT 1 FROM meetup.groups WHERE id = ${groupId} AND owner_user_id = ${userId}
+  `;
+  return rows.length > 0;
+}
+
+async function join(groupId, name, userId) {
+  const [m] = await sql`
+    INSERT INTO meetup.members (group_id, display_name, color, user_id)
+    VALUES (${groupId}, ${name}, '#ef4444', ${userId}) RETURNING id
+  `;
+  await sql`
+    UPDATE meetup.groups SET owner_user_id = ${userId}
+    WHERE id = ${groupId} AND owner_user_id IS NULL
+  `;
+  return m.id;
+}
+
+async function leave(memberId, groupId) {
+  const rows = await sql`DELETE FROM meetup.members WHERE id = ${memberId} RETURNING user_id`;
+  const owner = rows[0]?.user_id;
+  if (owner == null) return;
+  await sql`
+    UPDATE meetup.groups
+    SET owner_user_id = (
+      SELECT m.user_id FROM meetup.members m
+      WHERE m.group_id = ${groupId} AND m.user_id IS NOT NULL
+      ORDER BY m.id LIMIT 1
+    )
+    WHERE id = ${groupId} AND owner_user_id = ${owner}
+  `;
+}
+
+const [erin] = await sql`
+  INSERT INTO meetup.users (google_sub, email, name) VALUES ('sub-erin', 'e@x.com', 'Erin') RETURNING id
+`;
+const [frank] = await sql`
+  INSERT INTO meetup.users (google_sub, email, name) VALUES ('sub-frank', 'f@x.com', 'Frank') RETURNING id
+`;
+
+const [ownedGroup] = await sql`
+  INSERT INTO meetup.groups (code, name, term, owner_user_id)
+  VALUES ('ZZTEST3', 'owner test', '2025-fall', ${erin.id}) RETURNING id
+`;
+assert.equal(await isOwner(ownedGroup.id, erin.id), true, "the creator is the group admin");
+assert.equal(await isOwner(ownedGroup.id, frank.id), false, "another member is not");
+assert.equal(await isOwner(ownedGroup.id, null), false, "anonymous is not");
+
+// Created signed out: the first joiner adopts it, later ones don't.
+const [orphanGroup] = await sql`
+  INSERT INTO meetup.groups (code, name, term) VALUES ('ZZTEST4', 'adopt test', '2025-fall') RETURNING id
+`;
+assert.equal(await isOwner(orphanGroup.id, erin.id), false, "an ownerless group has no admin");
+const erinMember = await join(orphanGroup.id, 'Erin', erin.id);
+await join(orphanGroup.id, 'Frank', frank.id);
+assert.equal(await isOwner(orphanGroup.id, erin.id), true, "the first joiner adopts an ownerless group");
+assert.equal(await isOwner(orphanGroup.id, frank.id), false, "a later joiner does not take it from them");
+
+// Leaving hands it to the earliest remaining member, so it never strands.
+await leave(erinMember, orphanGroup.id);
+assert.equal(await isOwner(orphanGroup.id, erin.id), false, "leaving gives up the group");
+assert.equal(await isOwner(orphanGroup.id, frank.id), true, "and hands it to whoever is left");
+
+// Deleting the group takes the members with it.
+await sql`INSERT INTO meetup.member_courses (member_id, class_number)
+          SELECT id, '6023' FROM meetup.members WHERE group_id = ${orphanGroup.id}`;
+await sql`DELETE FROM meetup.groups WHERE id = ${orphanGroup.id}`;
+const after = await sql`SELECT COUNT(*)::int AS n FROM meetup.members WHERE group_id = ${orphanGroup.id}`;
+assert.equal(after[0].n, 0, "deleting a group cascades to its members and their courses");
+
+// Losing the admin's account must not delete the group.
+await sql`DELETE FROM meetup.users WHERE id = ${erin.id}`;
+const survived = await sql`SELECT owner_user_id FROM meetup.groups WHERE id = ${ownedGroup.id}`;
+assert.equal(survived.length, 1, "the group outlives its admin's account");
+assert.equal(survived[0].owner_user_id, null, "and is left without one");
+
+await sql`DELETE FROM meetup.groups WHERE id = ${ownedGroup.id}`;
+await sql`DELETE FROM meetup.users WHERE id = ${frank.id}`;
+
+console.log("ALL GROUP ADMIN CHECKS PASSED");

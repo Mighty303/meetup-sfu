@@ -37,6 +37,18 @@ export interface Group {
   code: string;
   name: string;
   term: string;
+  /** The group's admin — whoever created it. Null only until someone signs in. */
+  ownerUserId: number | null;
+}
+
+function toGroup(row: Record<string, unknown>): Group {
+  return {
+    id: row.id as number,
+    code: row.code as string,
+    name: row.name as string,
+    term: row.term as string,
+    ownerUserId: (row.owner_user_id as number | null) ?? null,
+  };
 }
 
 export interface Member {
@@ -63,18 +75,27 @@ export interface GroupState {
   termBounds: TermBounds | null;
 }
 
-export async function createGroup(name: string, term: string): Promise<Group> {
+/**
+ * `ownerUserId` is the group's admin. It may be null — the create form works
+ * signed out — in which case the first member to join adopts it, so a group
+ * always ends up with exactly one admin and it's still the person who started it.
+ */
+export async function createGroup(
+  name: string,
+  term: string,
+  ownerUserId: number | null
+): Promise<Group> {
   const sql = getDb();
   // Collisions are vanishingly rare at 31^7, but a retry is cheaper than a 500.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateCode();
     const rows = await sql`
-      INSERT INTO meetup.groups (code, name, term)
-      VALUES (${code}, ${name}, ${term})
+      INSERT INTO meetup.groups (code, name, term, owner_user_id)
+      VALUES (${code}, ${name}, ${term}, ${ownerUserId})
       ON CONFLICT (code) DO NOTHING
-      RETURNING id, code, name, term
+      RETURNING id, code, name, term, owner_user_id
     `;
-    if (rows.length > 0) return rows[0] as Group;
+    if (rows.length > 0) return toGroup(rows[0]);
   }
   throw new Error("could not allocate a unique group code");
 }
@@ -82,9 +103,9 @@ export async function createGroup(name: string, term: string): Promise<Group> {
 export async function findGroup(code: string): Promise<Group | null> {
   const sql = getDb();
   const rows = await sql`
-    SELECT id, code, name, term FROM meetup.groups WHERE code = ${code}
+    SELECT id, code, name, term, owner_user_id FROM meetup.groups WHERE code = ${code}
   `;
-  return (rows[0] as Group) ?? null;
+  return rows[0] ? toGroup(rows[0]) : null;
 }
 
 export async function addMember(
@@ -102,6 +123,14 @@ export async function addMember(
     VALUES (${groupId}, ${displayName}, ${color}, ${userId})
     RETURNING id, display_name, color, user_id
   `;
+  // A group created signed out has no admin yet; the first person through the
+  // door takes it. WHERE owner_user_id IS NULL makes that a one-time grab even
+  // if two people join at once.
+  await sql`
+    UPDATE meetup.groups SET owner_user_id = ${userId}
+    WHERE id = ${groupId} AND owner_user_id IS NULL
+  `;
+
   const user = await sql`SELECT image FROM meetup.users WHERE id = ${userId}`;
   return {
     id: rows[0].id,
@@ -200,9 +229,45 @@ export async function setMemberCourses(
   `;
 }
 
-export async function removeMember(memberId: number): Promise<void> {
+/**
+ * Leaving hands the group over. An admin who isn't in the group any more can
+ * still delete it, and nobody left inside could — so ownership follows the
+ * earliest remaining signed-in member, and only falls to null if there is none.
+ */
+export async function removeMember(memberId: number, groupId: number): Promise<void> {
   const sql = getDb();
-  await sql`DELETE FROM meetup.members WHERE id = ${memberId}`;
+  const rows = await sql`
+    DELETE FROM meetup.members WHERE id = ${memberId} RETURNING user_id
+  `;
+  const owner = rows[0]?.user_id as number | null | undefined;
+  if (owner == null) return;
+
+  await sql`
+    UPDATE meetup.groups
+    SET owner_user_id = (
+      SELECT m.user_id FROM meetup.members m
+      WHERE m.group_id = ${groupId} AND m.user_id IS NOT NULL
+      ORDER BY m.id
+      LIMIT 1
+    )
+    WHERE id = ${groupId} AND owner_user_id = ${owner}
+  `;
+}
+
+/** The one permission a group admin has that a member doesn't. */
+export async function isGroupOwner(groupId: number, userId: number | null): Promise<boolean> {
+  if (!userId) return false;
+  const sql = getDb();
+  const rows = await sql`
+    SELECT 1 FROM meetup.groups WHERE id = ${groupId} AND owner_user_id = ${userId}
+  `;
+  return rows.length > 0;
+}
+
+/** Members, their courses and their custom blocks go with it, by FK cascade. */
+export async function deleteGroup(groupId: number): Promise<void> {
+  const sql = getDb();
+  await sql`DELETE FROM meetup.groups WHERE id = ${groupId}`;
 }
 
 export async function memberBelongsToGroup(
@@ -342,7 +407,7 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
   const sql = getDb();
   const rows = await sql`
     SELECT m.id AS member_id, m.display_name, m.color,
-           g.id AS group_id, g.code, g.name, g.term,
+           g.id AS group_id, g.code, g.name, g.term, g.owner_user_id,
            COALESCE(ARRAY_AGG(mc.class_number) FILTER (WHERE mc.class_number IS NOT NULL), '{}') AS class_numbers
     FROM meetup.members m
     JOIN meetup.groups g ON g.id = m.group_id
@@ -370,7 +435,13 @@ export async function listMembershipsForUser(userId: number): Promise<Membership
     displayName: r.display_name,
     color: r.color,
     classNumbers: r.class_numbers as string[],
-    group: { id: r.group_id, code: r.code, name: r.name, term: r.term },
+    group: {
+      id: r.group_id,
+      code: r.code,
+      name: r.name,
+      term: r.term,
+      ownerUserId: r.owner_user_id ?? null,
+    },
     members: roster
       .filter((x) => x.group_id === r.group_id)
       .map((x) => ({

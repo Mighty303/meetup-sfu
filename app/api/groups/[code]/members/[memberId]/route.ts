@@ -82,6 +82,6 @@ export async function DELETE(
   const { code, memberId } = await params;
   const access = await authorizeMember(code, memberId);
   if ("error" in access) return NextResponse.json({ error: access.error }, { status: access.status });
-  await removeMember(access.id);
+  await removeMember(access.id, access.groupId);
   return new NextResponse(null, { status: 204 });
 }
