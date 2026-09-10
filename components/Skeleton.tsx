@@ -4,7 +4,7 @@
  * signed-out button placeholder in AuthButton.
  */
 
-import { COLUMN_HEIGHT } from "@/lib/grid-layout";
+import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
 
 /** One grey bar. Sizing comes from the caller — this only carries the tone. */
 export function Bar({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
@@ -31,6 +31,13 @@ const BLOCKS: [number, number][][] = [
 function WeekGridSkeleton() {
   return (
     <div className="-mx-4 animate-pulse overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-hidden>
+      {/* Stands in for whichever legend is about to load, so the real grid
+          lands where the placeholder was instead of 52px lower. */}
+      <div className={`mb-2 flex flex-col items-center justify-center gap-1 ${LEGEND_HEIGHT}`}>
+        <Bar className="h-3.5 w-56" />
+        <Bar className="h-3 w-72" />
+      </div>
+
       <div className="flex gap-2 text-xs">
         <div className="w-12 shrink-0">
           <div className="mb-1 h-4" />

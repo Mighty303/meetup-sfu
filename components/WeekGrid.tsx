@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { HoverCard, type HoverCardData } from "@/components/HoverCard";
-import { COLUMN_HEIGHT } from "@/lib/grid-layout";
+import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
 import type { BusyBlock, FreeWindow } from "@/lib/overlap";
 import { formatTime, WEEKDAYS, type DayKey } from "@/lib/sfu";
 
@@ -247,6 +247,29 @@ export function WeekGrid({
   return (
     // On narrow screens the week scrolls sideways instead of turning into slivers.
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      {/* Fixed height, and matched by the heatmap's own legend, so switching
+          between the two views doesn't move the page under you. */}
+      <div
+        className={`mb-2 flex flex-col items-center justify-center gap-1 text-xs ${LEGEND_HEIGHT}`}
+        style={{ minWidth: minGridWidth }}
+      >
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          {[
+            { box: "bg-emerald-400/30 ring-2 ring-inset ring-emerald-500/60", label: solo ? "Gap between classes" : "Gap · everyone free" },
+            ...(solo ? [] : [{ box: "bg-amber-300/25 ring-2 ring-inset ring-amber-500/50", label: "Gap · split campus" }]),
+            { box: "bg-neutral-400/10 ring-1 ring-inset ring-neutral-400/30", label: "Free, but nobody's on campus" },
+          ].map((k) => (
+            <span key={k.label} className="flex items-center gap-1 text-neutral-500">
+              <span className={`h-3.5 w-6 rounded-sm ${k.box}`} />
+              {k.label}
+            </span>
+          ))}
+        </div>
+        <span className="text-neutral-400 dark:text-neutral-500">
+          Coloured blocks are classes · hover one for the section and campus
+        </span>
+      </div>
+
       <div className="flex gap-2 text-xs" style={{ minWidth: minGridWidth }}>
         {/* Hour gutter. The empty header mirrors the day-name row so the hour
             labels line up with the grid lines instead of sitting a row high. */}

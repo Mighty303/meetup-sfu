@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { HoverCard, type HoverCardData } from "@/components/HoverCard";
 import type { Member } from "@/components/WeekGrid";
-import { COLUMN_HEIGHT } from "@/lib/grid-layout";
+import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
 import { availabilityBands, type BusyBlock } from "@/lib/overlap";
 import { formatTime, WEEKDAYS, type DayKey } from "@/lib/sfu";
 
@@ -105,30 +105,35 @@ export function HeatGrid({ members, busyByMember, dayStart, dayEnd, solo = false
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <div className="flex min-w-[620px] flex-col gap-2">
         {/* Legend. The ramp is sampled at the real group size, so the swatches
-            are the exact shades on the grid rather than a generic gradient. */}
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs">
-          <span className="text-neutral-500">{solo ? "In class" : `0/${total} free`}</span>
-          <span className="flex overflow-hidden rounded-sm border border-neutral-300 dark:border-neutral-700">
-            {Array.from({ length: swatches }, (_, i) => (
-              <span
-                key={i}
-                className="h-3.5 w-6"
-                style={{
-                  backgroundColor: `rgba(${FILL.join(",")},${fillAlpha((i / (swatches - 1)) * total, total)})`,
-                }}
-              />
-            ))}
-          </span>
-          <span className="text-neutral-500">{solo ? "Free" : `${total}/${total} free`}</span>
-          <span className="text-neutral-400 dark:text-neutral-500">
-            · hover a band {solo ? "for the time" : "to see who"}
-          </span>
+            are the exact shades on the grid rather than a generic gradient.
+            Fixed height, and matched by the detailed grid's own legend, so
+            switching between the two views doesn't move the page under you. */}
+        <div
+          className={`flex flex-col items-center justify-center gap-1 text-xs ${LEGEND_HEIGHT}`}
+        >
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <span className="text-neutral-500">{solo ? "In class" : `0/${total} free`}</span>
+            <span className="flex overflow-hidden rounded-sm border border-neutral-300 dark:border-neutral-700">
+              {Array.from({ length: swatches }, (_, i) => (
+                <span
+                  key={i}
+                  className="h-3.5 w-6"
+                  style={{
+                    backgroundColor: `rgba(${FILL.join(",")},${fillAlpha((i / (swatches - 1)) * total, total)})`,
+                  }}
+                />
+              ))}
+            </span>
+            <span className="text-neutral-500">{solo ? "Free" : `${total}/${total} free`}</span>
+            <span className="text-neutral-400 dark:text-neutral-500">
+              · hover a band {solo ? "for the time" : "to see who"}
+            </span>
+          </div>
           {/* Otherwise a blank Monday, and blank mornings, read as a bug
               rather than as the whole point of the view. */}
-          <span className="w-full text-center text-neutral-400 dark:text-neutral-500">
-            Only gaps are shaded. Nobody counts before their own first class, and
-            nothing counts once the day&apos;s last class is out —{" "}
-            {solo ? "you'd be going in specially" : "someone would be travelling in specially"}.
+          <span className="text-neutral-400 dark:text-neutral-500">
+            Only gaps are shaded — nobody counts before their first class, or
+            after the day&apos;s last
           </span>
         </div>
 
