@@ -423,113 +423,171 @@ export function partialFree({
   return windows;
 }
 
-export interface Slot extends Interval {
+export interface AvailabilityBand extends Interval {
   day: DayKey;
   /**
-   * Indices into the members array, not names — the caller holds the colours
-   * and avatars, and re-deriving a member from a name would break on two
-   * people called Alex.
+   * On campus and free, by index into the members array — not by name, because
+   * the caller holds the colours and avatars and two people can be called Alex.
+   *
+   * "On campus" is the whole point of the count: it means this band falls
+   * inside the day's teaching hours, with classes running either side of it.
+   * See `awayIndices` and `outsideIndices` for who that leaves out.
    */
   freeIndices: number[];
+  /** In class right now. */
   busyIndices: number[];
-  /** Campuses the free members are anchored to around this slot. */
+  /**
+   * Has no class at all that day. Never counted as free: they'd be making the
+   * trip to campus specially, so counting them would turn a quiet day into a
+   * meetup that only works if someone commutes for it. The same reason
+   * `FreeWindow.onCampus` leaves them out.
+   */
+  awayIndices: number[];
+  /**
+   * Has class that day, but this band falls outside the teaching day — before
+   * the group's first class or after its last. Free in the sense that nothing
+   * is booked, but not free in the sense that matters here: campus is empty,
+   * so meeting means a trip made specially.
+   */
+  outsideIndices: number[];
+  /** Campuses the free members are anchored to around this band. */
   campuses: string[];
   sharedCampus: boolean;
-  /**
-   * Nobody free here is making the trip specially: every one of them has a
-   * class on either side of this slot that day, and at least one of them still
-   * has a class to come — so the slot sits inside the group's day rather than
-   * after it. Per-member, unlike `FreeWindow.betweenClasses`, which only asks
-   * whether *some* block abuts the window edge.
-   */
-  betweenClasses: boolean;
 }
 
 export interface AvailabilityOptions {
   members: MemberSchedule[];
   dayStart: number;
   dayEnd: number;
-  /** Row height in minutes — 30 lines up with SFU's :30–:20 sections. */
-  slotMinutes: number;
   days?: readonly DayKey[];
 }
 
 /**
- * How many people are free in every slot of the week, for the heatmap view.
+ * How many people are on campus and free, and from exactly when to exactly
+ * when, for the heatmap view.
  *
  * `commonFree` answers "when is *everyone* free", which with five schedules is
  * often nowhere. This answers the weaker, more useful question — how many, at
  * what time — and lets the shading carry the count.
  *
- * Returns one row per slot, each row holding one entry per day, which is the
- * order the grid renders in.
+ * Only the gaps count. Nothing outside the day's teaching hours does: the
+ * stretch before the first class of the day and the evening after the last are
+ * not availability, they're a commute you'd be asking someone to make. Left in,
+ * they dominate the grid — every day is bright from 8am and again from 5pm,
+ * which says nothing, while the hour-long gap at noon that everyone could
+ * actually make gets no more weight than a Tuesday nobody is on campus at all.
+ *
+ * Those hours are the group's, not each member's. Someone whose last class
+ * ended at 1:20 is still standing on campus at 1:30, and staying an hour is a
+ * different favour from travelling in — the same call the detailed grid makes
+ * when it labels that stretch a gap. Cutting per member would empty the
+ * afternoon of every window the group could actually use.
+ *
+ * The bands are cut at real class edges, the same edges the detailed grid draws
+ * its blocks on, and never on a clock grid: a fixed half-hour row would put a
+ * boundary at 10:00 that nothing in anyone's week corresponds to, while hiding
+ * the one at 10:20 that does. Runs with the same people free are merged, so a
+ * band is exactly as long as that particular crowd is free — which makes it the
+ * same interval the "Gaps between classes" list below the grid reports.
  */
-export function availabilityGrid({
+export function availabilityBands({
   members,
   dayStart,
   dayEnd,
-  slotMinutes,
   days = WEEKDAYS,
-}: AvailabilityOptions): Slot[][] {
-  const rows: Slot[][] = [];
+}: AvailabilityOptions): AvailabilityBand[] {
+  const bands: AvailabilityBand[] = [];
 
-  // Precomputed per day so the inner loop isn't re-filtering every member's
-  // whole week for each of the ~28 slots.
-  const busyByDay = new Map<DayKey, BusyBlock[][]>(
-    days.map((day) => [day, members.map((m) => m.busy.filter((b) => b.day === day))])
-  );
+  for (const day of days) {
+    const dayBusy = members.map((m) => m.busy.filter((b) => b.day === day));
+    const away = members.map((_, i) => i).filter((i) => dayBusy[i].length === 0);
+    // The day's teaching hours: first class in, last class out, across everyone
+    // shown. Both edges are class edges, so they're always cut points and a
+    // segment is never half in and half out.
+    const allBlocks = dayBusy.flat();
+    const teaching =
+      allBlocks.length === 0
+        ? null
+        : {
+            start: Math.min(...allBlocks.map((b) => b.start)),
+            end: Math.max(...allBlocks.map((b) => b.end)),
+          };
 
-  for (let start = dayStart; start + slotMinutes <= dayEnd; start += slotMinutes) {
-    const end = start + slotMinutes;
-    const row: Slot[] = [];
+    // Cut the day wherever anyone's status can change. Between two cuts nobody
+    // starts or stops a class, so the free set is constant across the segment.
+    const cuts = new Set<number>([dayStart, dayEnd]);
+    for (const busy of dayBusy) {
+      for (const b of busy) {
+        if (b.start > dayStart && b.start < dayEnd) cuts.add(b.start);
+        if (b.end > dayStart && b.end < dayEnd) cuts.add(b.end);
+      }
+    }
+    const edges = [...cuts].sort((a, b) => a - b);
 
-    for (const day of days) {
-      const dayBusy = busyByDay.get(day)!;
-      const freeIndices: number[] = [];
-      const busyIndices: number[] = [];
+    // Adjacent segments with the same crowd free are one band. Without this a
+    // class ending at 10:20 while its owner's next starts at 10:20 would split
+    // an unchanged stretch in two for no visible reason.
+    let start = -1;
+    let free: number[] = [];
+    let outside: number[] = [];
 
-      dayBusy.forEach((busy, i) => {
-        // Overlap, not containment: a 9:30–10:20 class makes the 10:00 slot
-        // busy. Erring toward busy never proposes a slot someone has to walk
-        // out of halfway through.
-        if (busy.some((b) => b.start < end && b.end > start)) busyIndices.push(i);
-        else freeIndices.push(i);
-      });
-
+    const flush = (end: number) => {
+      if (start === -1) return;
+      const busyIndices = members
+        .map((_, i) => i)
+        .filter((i) => !free.includes(i) && !away.includes(i) && !outside.includes(i));
       const campuses = [
         ...new Set(
-          freeIndices
+          free
             .map((i) => anchorCampus(dayBusy[i], { start, end }))
             .filter((c): c is string => c !== null)
         ),
       ];
-
-      row.push({
+      bands.push({
         day,
         start,
         end,
-        freeIndices,
+        freeIndices: free,
         busyIndices,
+        awayIndices: away,
+        outsideIndices: outside,
         campuses,
         sharedCampus: campuses.length <= 1,
-        betweenClasses:
-          freeIndices.length > 0 &&
-          // Requiring a class both before *and* after for every single person
-          // is a bar almost no slot clears once the group passes three people —
-          // one of them always has an empty morning. Either side is enough to
-          // mean they're on campus anyway.
-          freeIndices.every((i) =>
-            dayBusy[i].some((b) => b.end <= start || b.start >= end)
-          ) &&
-          // ...but someone has to still have a class to come, or this is just
-          // "after everyone's last class", which is a different proposition.
-          freeIndices.some((i) => dayBusy[i].some((b) => b.start >= end)),
       });
+      start = -1;
+    };
+
+    for (let i = 0; i < edges.length - 1; i++) {
+      const from = edges[i];
+      const to = edges[i + 1];
+      const segFree: number[] = [];
+      const segOutside: number[] = [];
+      // Before the first class of the day or after the last, campus is empty —
+      // nobody is free here however clear their calendar looks.
+      const offHours = teaching === null || to <= teaching.start || from >= teaching.end;
+      dayBusy.forEach((busy, mi) => {
+        if (busy.length === 0) return; // not on campus at all today
+        if (offHours) {
+          segOutside.push(mi);
+          return;
+        }
+        // Overlap, not containment — a segment is inside one class or outside
+        // it, never half of each, because the cuts are the class edges.
+        if (!busy.some((b) => b.start < to && b.end > from)) segFree.push(mi);
+      });
+
+      if (start !== -1 && segFree.join() === free.join() && segOutside.join() === outside.join()) {
+        continue;
+      }
+      flush(from);
+      start = from;
+      free = segFree;
+      outside = segOutside;
     }
-    rows.push(row);
+    flush(dayEnd);
   }
 
-  return rows;
+  return bands;
 }
 
 export interface TermBounds {
