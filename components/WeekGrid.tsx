@@ -80,6 +80,80 @@ export interface Member {
   color: string;
 }
 
+interface Placed {
+  member: Member;
+  block: BusyBlock;
+  /** Column inside its overlap cluster, and how many columns that cluster has. */
+  column: number;
+  columns: number;
+  /** Columns it stretches across — empty neighbours to its right. */
+  span: number;
+}
+
+/**
+ * Lay one day out by what actually overlaps, not by who owns it. Classes that
+ * clash split the width between them; a class with nothing beside it takes the
+ * whole column, which is most of them — a fixed lane per member left every
+ * block a sliver of the day wide for no reason.
+ *
+ * Blocks are grouped into clusters of transitively overlapping classes, and
+ * columns are assigned greedily inside each cluster, so a busy hour never
+ * narrows the rest of the day.
+ */
+function packDay(entries: { member: Member; block: BusyBlock }[]): Placed[] {
+  const sorted = [...entries].sort(
+    (a, b) => a.block.start - b.block.start || a.block.end - b.block.end
+  );
+
+  const placed: Placed[] = [];
+  let cluster: Placed[] = [];
+  let clusterEnd = -Infinity;
+  let lanes: number[] = []; // end time of the last block in each column
+
+  function closeCluster() {
+    for (const p of cluster) {
+      p.columns = lanes.length;
+      // Grow right while the next column has nothing running at this hour, so
+      // a class alone at 2pm isn't a sliver just because 10am was busy.
+      while (
+        p.column + p.span < lanes.length &&
+        !cluster.some(
+          (q) =>
+            q !== p &&
+            q.column === p.column + p.span &&
+            q.block.start < p.block.end &&
+            q.block.end > p.block.start
+        )
+      ) {
+        p.span++;
+      }
+    }
+    placed.push(...cluster);
+    cluster = [];
+    lanes = [];
+    clusterEnd = -Infinity;
+  }
+
+  for (const entry of sorted) {
+    // Nothing in the cluster is still running, so this starts a fresh one.
+    if (entry.block.start >= clusterEnd && cluster.length > 0) closeCluster();
+
+    let column = lanes.findIndex((end) => end <= entry.block.start);
+    if (column === -1) {
+      column = lanes.length;
+      lanes.push(entry.block.end);
+    } else {
+      lanes[column] = entry.block.end;
+    }
+
+    cluster.push({ member: entry.member, block: entry.block, column, columns: 1, span: 1 });
+    clusterEnd = Math.max(clusterEnd, entry.block.end);
+  }
+  if (cluster.length > 0) closeCluster();
+
+  return placed;
+}
+
 interface Props {
   members: Member[];
   busyByMember: Record<number, BusyBlock[]>;
@@ -100,19 +174,34 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo =
   const pct = (mins: number) => ((mins - dayStart) / span) * 100;
   const heightPct = (mins: number) => (mins / span) * 100;
 
-  // Members with no schedule would otherwise reserve an empty lane and squeeze
-  // everyone else's blocks; lanes go only to people who actually have classes.
-  const laneMembers = members.filter((m) => (busyByMember[m.id] ?? []).length > 0);
-  const lane = 100 / Math.max(laneMembers.length, 1);
+  const withSchedules = members.filter((m) => (busyByMember[m.id] ?? []).length > 0);
 
-  // A lane narrower than ~46px truncates "CMPT 307" mid-word, so the grid grows
-  // with the number of people and scrolls sideways rather than shrinking lanes
+  // One packed layout per day, reused by the render below.
+  const placedByDay = new Map<DayKey, Placed[]>();
+  for (const day of WEEKDAYS) {
+    const entries = withSchedules.flatMap((member) =>
+      (busyByMember[member.id] ?? [])
+        .filter((b) => b.day === day)
+        .map((block) => ({ member, block }))
+    );
+    placedByDay.set(day, packDay(entries));
+  }
+
+  // The widest clash in the week decides how much room a column needs; most
+  // days are far narrower than the member count would have suggested.
+  const maxColumns = Math.max(
+    1,
+    ...[...placedByDay.values()].map((ps) => Math.max(1, ...ps.map((p) => p.columns)))
+  );
+
+  // A column narrower than ~46px truncates "CMPT 307" mid-word, so the grid
+  // grows with the worst clash and scrolls sideways rather than shrinking
   // past the point of being readable.
-  const minGridWidth = 56 + 5 * Math.max(124, laneMembers.length * 52);
+  const minGridWidth = 56 + 5 * Math.max(124, maxColumns * 62);
 
-  // Past three lanes a course code no longer fits at the roomier size, so the
+  // Past three columns a course code no longer fits at the roomier size, so the
   // type and padding tighten rather than letting "CMPT 307" clip mid-word.
-  const tight = laneMembers.length >= 4;
+  const tight = maxColumns >= 4;
 
   const hours: number[] = [];
   for (let m = Math.ceil(dayStart / 60) * 60; m <= dayEnd; m += 60) hours.push(m);
@@ -223,64 +312,62 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo =
                     );
                   })}
 
-                  {/* one vertical lane per member who has classes */}
-                  {laneMembers.map((member, mi) =>
-                    (busyByMember[member.id] ?? [])
-                      .filter((b) => b.day === day)
-                      .map((b, bi) => {
-                        const minutes = b.end - b.start;
-                        return (
-                          <div
-                            key={`${member.id}-${bi}`}
-                            className={`absolute flex flex-col overflow-hidden rounded-md leading-tight text-white ${
-                              tight ? "px-1 py-0.5" : "px-1.5 py-1"
-                            }`}
-                            style={{
-                              top: `calc(${pct(b.start)}% + ${GAP_Y / 2}px)`,
-                              height: `calc(${heightPct(minutes)}% - ${GAP_Y}px)`,
-                              left: `calc(${mi * lane}% + ${GAP_X / 2}px)`,
-                              width: `calc(${lane}% - ${GAP_X}px)`,
-                              backgroundColor: member.color,
-                            }}
-                            onMouseEnter={(e) =>
-                              setHover({
-                                title: b.course,
-                                subtitle: b.detail || undefined,
-                                lines: [
-                                  member.displayName,
-                                  `${formatTime(b.start)} – ${formatTime(b.end)} · ${formatDuration(minutes)}`,
-                                  b.campus ?? "No campus listed",
-                                ],
-                                accent: member.color,
-                                x: e.clientX,
-                                y: e.clientY,
-                              })
-                            }
-                            onMouseMove={(e) =>
-                              setHover((h) => (h ? { ...h, x: e.clientX, y: e.clientY } : h))
-                            }
-                            onMouseLeave={() => setHover(null)}
-                          >
-                            <span className={`truncate font-semibold ${tight ? "text-[10px]" : "text-[11px]"}`}>
-                              {b.course}
-                            </span>
-                            {/* Whose block it is matters more than the section
-                                code, so the name gets the second line and the
-                                section only appears when there's room for it. */}
-                            {minutes >= 50 && (
-                              <span className={`truncate font-medium text-white/95 ${tight ? "text-[9px]" : "text-[10px]"}`}>
-                                {member.displayName}
-                              </span>
-                            )}
-                            {minutes >= 80 && b.detail && (
-                              <span className={`truncate text-white/80 ${tight ? "text-[9px]" : "text-[10px]"}`}>
-                                {b.detail}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })
-                  )}
+                  {/* Blocks share width only with what they overlap. */}
+                  {(placedByDay.get(day) ?? []).map(({ member, block: b, column, columns, span }, bi) => {
+                    const minutes = b.end - b.start;
+                    const unit = 100 / columns;
+                    const width = unit * span;
+                    return (
+                      <div
+                        key={`${member.id}-${bi}`}
+                        className={`absolute flex flex-col overflow-hidden rounded-md leading-tight text-white ${
+                          tight ? "px-1 py-0.5" : "px-1.5 py-1"
+                        }`}
+                        style={{
+                          top: `calc(${pct(b.start)}% + ${GAP_Y / 2}px)`,
+                          height: `calc(${heightPct(minutes)}% - ${GAP_Y}px)`,
+                          left: `calc(${column * unit}% + ${GAP_X / 2}px)`,
+                          width: `calc(${width}% - ${GAP_X}px)`,
+                          backgroundColor: member.color,
+                        }}
+                        onMouseEnter={(e) =>
+                          setHover({
+                            title: b.course,
+                            subtitle: b.detail || undefined,
+                            lines: [
+                              member.displayName,
+                              `${formatTime(b.start)} – ${formatTime(b.end)} · ${formatDuration(minutes)}`,
+                              b.campus ?? "No campus listed",
+                            ],
+                            accent: member.color,
+                            x: e.clientX,
+                            y: e.clientY,
+                          })
+                        }
+                        onMouseMove={(e) =>
+                          setHover((h) => (h ? { ...h, x: e.clientX, y: e.clientY } : h))
+                        }
+                        onMouseLeave={() => setHover(null)}
+                      >
+                        <span className={`truncate font-semibold ${tight ? "text-[10px]" : "text-[11px]"}`}>
+                          {b.course}
+                        </span>
+                        {/* Whose block it is matters more than the section
+                            code, so the name gets the second line and the
+                            section only appears when there's room for it. */}
+                        {minutes >= 50 && (
+                          <span className={`truncate font-medium text-white/95 ${tight ? "text-[9px]" : "text-[10px]"}`}>
+                            {member.displayName}
+                          </span>
+                        )}
+                        {minutes >= 80 && b.detail && (
+                          <span className={`truncate text-white/80 ${tight ? "text-[9px]" : "text-[10px]"}`}>
+                            {b.detail}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
