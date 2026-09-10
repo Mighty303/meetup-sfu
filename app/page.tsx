@@ -22,6 +22,10 @@ interface Membership {
   }[];
 }
 
+// Names shown on a group card before the rest collapse into a count, so
+// every card in the list is exactly one member-row tall.
+const MEMBER_PREVIEW = 3;
+
 const TERMS = (() => {
   const now = new Date();
   const seasons = ["spring", "summer", "fall"];
@@ -89,27 +93,30 @@ export default function Home() {
       {authStatus === "authenticated" && memberships === null && (
         <section className="flex flex-col gap-2" aria-hidden>
           <h2 className="text-sm font-medium">Your groups</h2>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-3">
             {[
-              { name: "w-32", chips: ["w-20", "w-24"] },
-              { name: "w-24", chips: ["w-16", "w-20", "w-14", "w-20"] },
+              { name: "w-32", chips: ["w-20", "w-24", "w-16"] },
+              { name: "w-24", chips: ["w-16", "w-20", "w-14"] },
             ].map((row, i) => (
               <li
                 key={i}
-                className="flex animate-pulse flex-col gap-2 rounded-lg border border-neutral-200 px-3 py-3 dark:border-neutral-800"
+                className="flex animate-pulse gap-4 rounded-xl border border-neutral-200 p-5 dark:border-neutral-800"
               >
-                <div className="flex items-center gap-2">
-                  <div className={`h-4 rounded bg-neutral-200 dark:bg-neutral-800 ${row.name}`} />
-                  <div className="h-3 w-16 rounded bg-neutral-200 dark:bg-neutral-800" />
-                  <div className="ml-auto h-3 w-20 rounded bg-neutral-200 dark:bg-neutral-800" />
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  {row.chips.map((w, j) => (
-                    <div key={j} className="flex items-center gap-1.5">
-                      <div className="h-4 w-4 rounded-full bg-neutral-200 dark:bg-neutral-800" />
-                      <div className={`h-3 rounded bg-neutral-200 dark:bg-neutral-800 ${w}`} />
-                    </div>
-                  ))}
+                <div className="h-11 w-11 shrink-0 rounded-lg bg-neutral-200 dark:bg-neutral-800" />
+                <div className="flex flex-1 flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-5 rounded bg-neutral-200 dark:bg-neutral-800 ${row.name}`} />
+                    <div className="h-4 w-16 rounded bg-neutral-200 dark:bg-neutral-800" />
+                    <div className="ml-auto h-4 w-20 rounded bg-neutral-200 dark:bg-neutral-800" />
+                  </div>
+                  <div className="flex h-5 items-center gap-x-3">
+                    {row.chips.map((w, j) => (
+                      <div key={j} className="flex items-center gap-1.5">
+                        <div className="h-5 w-5 rounded-full bg-neutral-200 dark:bg-neutral-800" />
+                        <div className={`h-3.5 rounded bg-neutral-200 dark:bg-neutral-800 ${w}`} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </li>
             ))}
@@ -120,39 +127,59 @@ export default function Home() {
       {authStatus === "authenticated" && memberships && memberships.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Your groups</h2>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-3">
             {memberships.map((m) => (
               <li key={m.memberId}>
                 <Link
                   href={`/g/${m.group.code}`}
-                  className="flex flex-col gap-2 rounded-lg border border-neutral-200 px-3 py-3 transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
+                  className="flex gap-4 rounded-xl border border-neutral-200 p-5 transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
                 >
-                  <div className="flex flex-wrap items-baseline gap-2 text-sm">
-                    <span className="font-medium">{m.group.name}</span>
-                    <span className="text-xs text-neutral-500">{fromTermCode(m.group.term)}</span>
-                    <span className="ml-auto text-xs text-neutral-500">
-                      {m.classNumbers.length > 0
-                        ? `you: ${m.classNumbers.length} section${m.classNumbers.length === 1 ? "" : "s"}`
-                        : "you: no schedule yet"}
-                    </span>
-                  </div>
-                  {/* Who else is in it — the fastest way to tell two groups
-                      apart when their names are both three letters long. */}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                    {m.members.map((p) => (
-                      <span
-                        key={p.id}
-                        className={`flex items-center gap-1.5 ${p.hasSchedule ? "" : "opacity-50"}`}
-                        title={p.hasSchedule ? undefined : "no schedule yet"}
-                      >
-                        {p.image ? (
-                          <Image src={p.image} alt="" width={16} height={16} className="rounded-full" />
-                        ) : (
-                          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: p.color }} />
-                        )}
-                        <span style={{ color: p.color }}>{p.displayName}</span>
+                  {/* Tinted with your own colour in this group, so the card
+                      carries the same identity the schedule grid uses. */}
+                  <span
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: `${m.color}22`, color: m.color }}
+                  >
+                    <GroupIcon />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-3">
+                    <div className="flex items-baseline gap-2 text-base">
+                      <span className="truncate font-medium">{m.group.name}</span>
+                      <span className="shrink-0 text-sm text-neutral-500">{fromTermCode(m.group.term)}</span>
+                      <span className="ml-auto shrink-0 text-sm text-neutral-500">
+                        {m.classNumbers.length > 0
+                          ? `you: ${m.classNumbers.length} section${m.classNumbers.length === 1 ? "" : "s"}`
+                          : "you: no schedule yet"}
                       </span>
-                    ))}
+                    </div>
+                    {/* Who else is in it — the fastest way to tell two groups
+                        apart when their names are both three letters long.
+                        Capped at MEMBER_PREVIEW so every card is one row tall
+                        and the list stays scannable; the rest are a count. */}
+                    <div className="flex h-5 items-center gap-x-3 overflow-hidden text-sm">
+                      {m.members.slice(0, MEMBER_PREVIEW).map((p) => (
+                        <span
+                          key={p.id}
+                          className={`flex min-w-0 items-center gap-1.5 ${p.hasSchedule ? "" : "opacity-50"}`}
+                          title={p.hasSchedule ? undefined : "no schedule yet"}
+                        >
+                          {p.image ? (
+                            <Image src={p.image} alt="" width={20} height={20} className="shrink-0 rounded-full" />
+                          ) : (
+                            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: p.color }} />
+                          )}
+                          <span className="truncate" style={{ color: p.color }}>{p.displayName}</span>
+                        </span>
+                      ))}
+                      {m.members.length > MEMBER_PREVIEW && (
+                        <span
+                          className="shrink-0 text-neutral-500"
+                          title={m.members.slice(MEMBER_PREVIEW).map((p) => p.displayName).join(", ")}
+                        >
+                          +{m.members.length - MEMBER_PREVIEW} more…
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </Link>
               </li>
@@ -207,5 +234,16 @@ export default function Home() {
         </div>
       </form>
     </main>
+  );
+}
+
+function GroupIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="7.5" cy="7" r="2.75" />
+      <path d="M2.5 16c0-2.5 2.2-4.25 5-4.25S12.5 13.5 12.5 16" />
+      <path d="M13.25 5.1a2.75 2.75 0 0 1 0 5.3" />
+      <path d="M14.5 12.2c1.9.5 3 1.9 3 3.8" />
+    </svg>
   );
 }
