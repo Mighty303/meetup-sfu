@@ -818,12 +818,15 @@ function GroupSchedule({ code }: { code: string }) {
       )}
 
       <section>
-        <h2 className="mb-1 font-medium">{view === "mine" ? "Your gaps between classes" : "Gaps between classes"}</h2>
-        <p className="mb-2 text-xs text-neutral-500">
-          {view === "mine"
-            ? "Windows with a class on both sides — you're already on campus and have to stay."
-            : "Windows with a class on both sides, for everyone ticked on above. Names are the people who have class that day, so they're on campus already — anyone else would be making the trip specially."}
-        </p>
+        <Collapsible
+          title={view === "mine" ? "Your gaps between classes" : "Gaps between classes"}
+          count={gaps.length}
+          blurb={
+            view === "mine"
+              ? "Windows with a class on both sides — you're already on campus and have to stay."
+              : "Windows with a class on both sides, for everyone ticked on above. Names are the people who have class that day, so they're on campus already — anyone else would be making the trip specially."
+          }
+        >
         {gaps.length === 0 ? (
           <p className="text-sm text-neutral-500">
             {view === "mine" ? "No hour-long gap between your classes this week" : "No hour-long gap this week for everyone ticked on"}
@@ -863,16 +866,16 @@ function GroupSchedule({ code }: { code: string }) {
             ))}
           </ul>
         )}
+        </Collapsible>
       </section>
 
       {partial.length > 0 && (
         <section>
-          <h2 className="mb-1 font-medium">Some of you free</h2>
-          <p className="mb-2 text-xs text-neutral-500">
-            Windows the whole group can&apos;t make, but part of it can. Two
-            people already on campus is a meetup nobody has to travel for, so
-            those come first.
-          </p>
+          <Collapsible
+            title="Some of you free"
+            count={partial.length}
+            blurb="Windows the whole group can't make, but part of it can. Two people already on campus is a meetup nobody has to travel for, so those come first."
+          >
           <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {(showAllPartial ? partial : partial.slice(0, 12)).map((w, i) => {
               const onCampus = w.onCampus.length >= 2;
@@ -922,6 +925,7 @@ function GroupSchedule({ code }: { code: string }) {
               {showAllPartial ? "Show fewer" : `Show all ${partial.length}`}
             </button>
           )}
+          </Collapsible>
         </section>
       )}
 
@@ -960,6 +964,49 @@ function GroupSchedule({ code }: { code: string }) {
         </section>
       )}
     </main>
+  );
+}
+
+/**
+ * A section folded away behind its own heading, closed until you ask for it.
+ * Native <details>: keyboard and screen-reader behaviour come for free, and
+ * taking it back out is deleting one wrapper rather than unpicking state.
+ */
+function Collapsible({
+  title,
+  count,
+  blurb,
+  children,
+}: {
+  title: string;
+  /** Shown on the closed row, so folding it away doesn't hide whether it's empty. */
+  count: number;
+  blurb: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+          className="shrink-0 translate-y-px text-neutral-400 transition-transform group-open:rotate-90"
+        >
+          <path d="M4 2l4 4-4 4" />
+        </svg>
+        <h2 className="font-medium">{title}</h2>
+        <span className="text-xs text-neutral-500">{count}</span>
+      </summary>
+      <p className="mt-1 mb-2 pl-5 text-xs text-neutral-500">{blurb}</p>
+      <div className="pl-5">{children}</div>
+    </details>
   );
 }
 
