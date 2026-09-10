@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import { isAdminEmail } from "@/lib/admin";
 import { getUser, upsertUser } from "@/lib/users";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -32,6 +33,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (typeof token.appUserId === "number") {
         session.appUserId = token.appUserId;
       }
+      // Computed here rather than stamped on the token at sign-in, so adding an
+      // address to the allowlist takes effect without everyone signing out
+      // again. It only decides whether the nav shows the link — the portal
+      // itself re-checks against the database.
+      session.isAdmin = isAdminEmail(token.email);
       // A chosen picture wins over Google's everywhere the session is read.
       if (session.user && typeof token.avatar === "string") {
         session.user.image = token.avatar;
