@@ -317,10 +317,9 @@ function GroupSchedule({ code }: { code: string }) {
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/g/${code}` : "";
   const thisMonday = mondayOf(new Date());
 
-  // Gaps wedged between classes lead — nobody has to make a special trip for
-  // them. The rest are still worth listing, just further down.
+  // Only gaps wedged between classes are worth listing — nobody has to make a
+  // special trip for them.
   const gaps = free.filter((w) => w.betweenClasses);
-  const otherFree = free.filter((w) => !w.betweenClasses);
 
   // Pair each member with their untimetabled sections, dropping anyone who has
   // none — and anyone ticked off, since nothing else on the page counts them.
@@ -757,9 +756,7 @@ function GroupSchedule({ code }: { code: string }) {
         {gaps.length === 0 ? (
           <p className="text-sm text-neutral-500">
             {view === "mine" ? "No hour-long gap between your classes this week" : "No hour-long gap this week for everyone ticked on"}
-            {partial.length > 0
-              ? " — tick someone off, or take one of the part-group windows below"
-              : otherFree.length > 0 && " — or use one of the open windows below"}
+            {partial.length > 0 && " — tick someone off, or take one of the part-group windows below"}
             .
           </p>
         ) : (
@@ -796,32 +793,6 @@ function GroupSchedule({ code }: { code: string }) {
           </ul>
         )}
       </section>
-
-      {otherFree.length > 0 && (
-        <section>
-          <h2 className="mb-1 font-medium">{view === "mine" ? "Your other free time" : "Other free windows"}</h2>
-          <p className="mb-2 text-xs text-neutral-500">
-            {view === "mine"
-              ? "Free, but before your first class or after your last — you'd be coming to campus specially."
-              : "Everyone is free, but it's before the first class or after the last — someone has to come to campus for it."}
-          </p>
-          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-            {otherFree.map((w, i) => (
-              <li key={i} className="flex items-baseline gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800">
-                <span className="w-20 shrink-0 font-medium">{DAY_LABELS[w.day] ?? w.day}</span>
-                <span className="tabular-nums">{formatTime(w.start)} – {formatTime(w.end)}</span>
-                <span className="ml-auto text-xs text-neutral-500">
-                  {w.campuses.length === 0
-                    ? "anywhere"
-                    : w.sharedCampus
-                      ? w.campuses[0]
-                      : `split: ${w.campuses.join(" / ")}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       {partial.length > 0 && (
         <section>
