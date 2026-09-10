@@ -80,9 +80,13 @@ export interface Member {
   color: string;
 }
 
-interface Placed {
-  member: Member;
+interface Entry {
+  /** Everyone sitting in this exact section at this exact hour. */
+  members: Member[];
   block: BusyBlock;
+}
+
+interface Placed extends Entry {
   /** Column inside its overlap cluster, and how many columns that cluster has. */
   column: number;
   columns: number;
@@ -100,7 +104,35 @@ interface Placed {
  * columns are assigned greedily inside each cluster, so a busy hour never
  * narrows the rest of the day.
  */
-function packDay(entries: { member: Member; block: BusyBlock }[]): Placed[] {
+/**
+ * One block per section, not per person. Two people in CMPT 479 D100 are in
+ * the same room at the same hour — drawing that twice both wastes the width
+ * and hides the fact that they're already together. Custom busy time never
+ * merges: it has no class number, and two people's "Busy" is not one event.
+ */
+function mergeSameSection(entries: { member: Member; block: BusyBlock }[]): Entry[] {
+  const merged: Entry[] = [];
+  const byKey = new Map<string, Entry>();
+
+  for (const { member, block } of entries) {
+    if (block.classNumber === undefined) {
+      merged.push({ members: [member], block });
+      continue;
+    }
+    const key = `${block.classNumber}|${block.start}|${block.end}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.members.push(member);
+    } else {
+      const entry: Entry = { members: [member], block };
+      byKey.set(key, entry);
+      merged.push(entry);
+    }
+  }
+  return merged;
+}
+
+function packDay(entries: Entry[]): Placed[] {
   const sorted = [...entries].sort(
     (a, b) => a.block.start - b.block.start || a.block.end - b.block.end
   );
@@ -146,7 +178,7 @@ function packDay(entries: { member: Member; block: BusyBlock }[]): Placed[] {
       lanes[column] = entry.block.end;
     }
 
-    cluster.push({ member: entry.member, block: entry.block, column, columns: 1, span: 1 });
+    cluster.push({ members: entry.members, block: entry.block, column, columns: 1, span: 1 });
     clusterEnd = Math.max(clusterEnd, entry.block.end);
   }
   if (cluster.length > 0) closeCluster();
@@ -184,7 +216,9 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo =
         .filter((b) => b.day === day)
         .map((block) => ({ member, block }))
     );
-    placedByDay.set(day, packDay(entries));
+    // Merging happens after the member filter, so unticking someone in
+    // "Who's in" splits a shared block back apart on the same render.
+    placedByDay.set(day, packDay(mergeSameSection(entries)));
   }
 
   // The widest clash in the week decides how much room a column needs; most
@@ -313,33 +347,35 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo =
                   })}
 
                   {/* Blocks share width only with what they overlap. */}
-                  {(placedByDay.get(day) ?? []).map(({ member, block: b, column, columns, span }, bi) => {
+                  {(placedByDay.get(day) ?? []).map(({ members: who, block: b, column, columns, span }, bi) => {
                     const minutes = b.end - b.start;
                     const unit = 100 / columns;
                     const width = unit * span;
+                    const shared = who.length > 1;
                     return (
                       <div
-                        key={`${member.id}-${bi}`}
+                        key={`${who[0].id}-${bi}`}
                         className={`absolute flex flex-col overflow-hidden rounded-md leading-tight text-white ${
                           tight ? "px-1 py-0.5" : "px-1.5 py-1"
-                        }`}
+                        } ${shared ? "bg-neutral-700 pl-2.5 dark:bg-neutral-600" : ""}`}
                         style={{
                           top: `calc(${pct(b.start)}% + ${GAP_Y / 2}px)`,
                           height: `calc(${heightPct(minutes)}% - ${GAP_Y}px)`,
                           left: `calc(${column * unit}% + ${GAP_X / 2}px)`,
                           width: `calc(${width}% - ${GAP_X}px)`,
-                          backgroundColor: member.color,
+                          backgroundColor: shared ? undefined : who[0].color,
                         }}
                         onMouseEnter={(e) =>
                           setHover({
                             title: b.course,
                             subtitle: b.detail || undefined,
                             lines: [
-                              member.displayName,
+                              who.map((m) => m.displayName).join(", "),
                               `${formatTime(b.start)} – ${formatTime(b.end)} · ${formatDuration(minutes)}`,
                               b.campus ?? "No campus listed",
+                              ...(shared ? ["Same section — you're already together"] : []),
                             ],
-                            accent: member.color,
+                            accent: who[0].color,
                             x: e.clientX,
                             y: e.clientY,
                           })
@@ -349,15 +385,25 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo =
                         }
                         onMouseLeave={() => setHover(null)}
                       >
+                        {/* A shared block has no single owner, so the colours
+                            move to a stripe down the edge and the fill goes
+                            neutral — you can still scan the column for a person. */}
+                        {shared && (
+                          <span className="absolute inset-y-0 left-0 flex w-1.5 flex-col overflow-hidden rounded-l-md">
+                            {who.map((m) => (
+                              <span key={m.id} className="flex-1" style={{ backgroundColor: m.color }} />
+                            ))}
+                          </span>
+                        )}
                         <span className={`truncate font-semibold ${tight ? "text-[10px]" : "text-[11px]"}`}>
                           {b.course}
                         </span>
                         {/* Whose block it is matters more than the section
-                            code, so the name gets the second line and the
+                            code, so the names get the second line and the
                             section only appears when there's room for it. */}
                         {minutes >= 50 && (
                           <span className={`truncate font-medium text-white/95 ${tight ? "text-[9px]" : "text-[10px]"}`}>
-                            {member.displayName}
+                            {nameList(who.map((m) => m.displayName), shared ? 2 : 1)}
                           </span>
                         )}
                         {minutes >= 80 && b.detail && (

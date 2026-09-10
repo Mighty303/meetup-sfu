@@ -25,6 +25,11 @@ export interface BusyBlock extends Interval {
   /** Split for display: "CMPT 225" reads first, "D100 LEC" is secondary. */
   course: string;
   detail: string;
+  /**
+   * The section this came from. Set for course blocks, absent on custom busy
+   * time — two people's "Busy" is not the same event, but two people's 4906 is.
+   */
+  classNumber?: string;
 }
 
 export interface FreeWindow extends Interval {
@@ -147,6 +152,7 @@ export function busyFromCourses(
           label: `${course.dept} ${course.number} ${section.section} ${sched.sectionCode}`,
           course: `${course.dept} ${course.number}`,
           detail: `${section.section} ${sched.sectionCode}`,
+          classNumber: section.classNumber,
         });
       }
     }
