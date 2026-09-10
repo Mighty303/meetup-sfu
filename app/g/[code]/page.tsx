@@ -119,6 +119,8 @@ function GroupSchedule({ code }: { code: string }) {
   // Deleting is irreversible and takes everyone's schedules, so the button has
   // to be armed first — no dialog, just a second, differently-worded click.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Leaving drops your sections from everyone's view, so it arms the same way.
+  const [confirmLeave, setConfirmLeave] = useState(false);
   // The group's own name, which only its admin can change. Null when nobody is
   // editing it; the string being edited otherwise, so "" is a real state.
   const [draftName, setDraftName] = useState<string | null>(null);
@@ -180,6 +182,7 @@ function GroupSchedule({ code }: { code: string }) {
     setSaving(true);
     await fetch(`/api/groups/${code}/members/${me.id}`, { method: "DELETE" });
     setSaving(false);
+    setConfirmLeave(false);
     load();
   }
 
@@ -489,13 +492,32 @@ function GroupSchedule({ code }: { code: string }) {
 
           <div className="flex flex-wrap items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
-            <button
-              onClick={leave}
-              disabled={saving}
-              className="ml-auto text-xs text-neutral-500 underline-offset-2 hover:text-red-600 hover:underline"
-            >
-              Leave group
-            </button>
+            {confirmLeave ? (
+              <span className="ml-auto flex items-center gap-2 text-xs">
+                <span className="text-neutral-600 dark:text-neutral-300">
+                  Leave {state.group.name}?
+                </span>
+                <button
+                  onClick={leave}
+                  disabled={saving}
+                  className="rounded-lg bg-red-600 px-2 py-1 font-medium text-white disabled:opacity-50"
+                >
+                  {saving ? "Leaving…" : "Leave"}
+                </button>
+                <button onClick={() => setConfirmLeave(false)} className="text-neutral-500">
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirmLeave(true)}
+                disabled={saving}
+                className="ml-auto flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:border-neutral-800 dark:text-neutral-300 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+              >
+                <LeaveIcon />
+                Leave group
+              </button>
+            )}
             {isAdmin && (
               confirmDelete ? (
                 <span className="flex items-center gap-2 text-xs">
@@ -517,8 +539,9 @@ function GroupSchedule({ code }: { code: string }) {
                 <button
                   onClick={() => setConfirmDelete(true)}
                   disabled={saving}
-                  className="text-xs text-neutral-500 underline-offset-2 hover:text-red-600 hover:underline"
+                  className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:border-neutral-800 dark:text-neutral-300 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-400"
                 >
+                  <TrashIcon />
                   Delete group
                 </button>
               )
@@ -871,6 +894,50 @@ function PencilIcon() {
     >
       <path d="M13.75 3.25l3 3-9.5 9.5-3.75.75.75-3.75 9.5-9.5z" />
       <path d="M12.25 4.75l3 3" />
+    </svg>
+  );
+}
+
+function LeaveIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="shrink-0"
+    >
+      {/* Door, then an arrow stepping out of it. */}
+      <path d="M11.5 3.25h4.25v13.5H11.5" />
+      <path d="M8.75 10h-6" />
+      <path d="M5.5 7l-2.75 3 2.75 3" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="shrink-0"
+    >
+      <path d="M3.5 6h13" />
+      <path d="M8 3.5h4" />
+      <path d="M5.25 6l.75 10.25h8l.75-10.25" />
+      <path d="M8.5 9v4.75M11.5 9v4.75" />
     </svg>
   );
 }
