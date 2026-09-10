@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
+import { CalendarTools } from "@/components/CalendarTools";
 import { CoursePicker } from "@/components/CoursePicker";
 import { HeatGrid } from "@/components/HeatGrid";
 import { GroupPageSkeleton } from "@/components/Skeleton";
@@ -579,6 +580,8 @@ function GroupSchedule({ code }: { code: string }) {
             it once. Changes here show up in all of them.
           </p>
 
+          <CalendarTools groupCode={code} memberId={me.id} week={week} />
+
           <div className="flex flex-wrap items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
             {confirmLeave ? (
@@ -873,6 +876,17 @@ function GroupSchedule({ code }: { code: string }) {
               </li>
             ))}
           </ul>
+        )}
+        {gaps.length > 0 && (
+          /* Sits with the windows rather than only in the member panel, so it
+             works for anyone holding the invite code — the route is open for
+             the same reason the group page is. */
+          <a
+            href={`/api/groups/${code}/calendar?gaps=1${week ? `&week=${week}` : ""}`}
+            className="mt-2 inline-block text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          >
+            Add these to a calendar (.ics)
+          </a>
         )}
         </Collapsible>
       </section>
