@@ -9,6 +9,7 @@ import {
   type DayKey,
   type CourseWithSections,
   type SectionDetail,
+  type SectionHit,
   parseDays,
   toMinutes,
 } from "./sfu";
@@ -52,6 +53,35 @@ export interface FreeWindow extends Interval {
    * out: two names here means a meetup nobody has to travel for.
    */
   onCampus: string[];
+}
+
+/**
+ * One section's meeting times as blocks, straight from a search hit — no class
+ * number lookup, because the picker already holds the section it's offering.
+ * Used to sketch a course onto the grid before it's saved.
+ */
+export function blocksFromSection(course: string, section: SectionHit): BusyBlock[] {
+  const blocks: BusyBlock[] = [];
+  for (const m of section.meetings) {
+    const start = toMinutes(m.startTime);
+    const end = toMinutes(m.endTime);
+    // Async sections carry no days and no times; there is nothing to draw.
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    const detail = `${section.section} ${m.sectionCode}`.trim();
+    for (const day of parseDays(m.days)) {
+      blocks.push({
+        day,
+        start,
+        end,
+        campus: m.campus || null,
+        label: `${course} ${detail}`.trim(),
+        course,
+        detail,
+        classNumber: section.classNumber,
+      });
+    }
+  }
+  return blocks;
 }
 
 export function mergeIntervals(intervals: Interval[]): Interval[] {

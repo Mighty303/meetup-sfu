@@ -12,6 +12,12 @@ interface Props {
   classNumbers: string[];
   /** Called after every add or remove so the page can refresh the grid. */
   onChange: () => void;
+  /**
+   * Fired with the section under the cursor, and null on the way out, so the
+   * page can sketch it onto the grid before it's saved. Omitted where there is
+   * no grid to sketch on.
+   */
+  onPreview?: (hit: { course: string; section: SectionHit } | null) => void;
 }
 
 function courseCode(c: CourseHit): string {
@@ -27,14 +33,13 @@ function meetingLabel(s: SectionHit): string {
     .join("  |  ");
 }
 
-export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange }: Props) {
+export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange, onPreview }: Props) {
   const [query, setQuery] = useState("");
   // Tagged with the query they answer, so a result set never outlives its box.
   const [hits, setHits] = useState<{ q: string; courses: CourseHit[] }>({ q: "", courses: [] });
   const [saved, setSaved] = useState<CourseHit[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
   const [link, setLink] = useState("");
   const [pasting, setPasting] = useState(false);
 
@@ -130,32 +135,6 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
     onChange();
   }
 
-  /**
-   * The button next to the box. Typing already searches, so this only has
-   * something to do when the query names exactly one section — "cmpt 307",
-   * whose D100 is the only thing it can mean. Anything broader has to be
-   * picked from the list, since we can't guess which section they're in.
-   */
-  async function addFromQuery(e: React.FormEvent) {
-    e.preventDefault();
-    if (hits.q !== q) return; // results still in flight
-    const sections = hits.courses.flatMap((c) => c.sections);
-    const unsaved = sections.filter((sec) => !savedSet.has(sec.classNumber));
-    if (unsaved.length === 1) {
-      setHint(null);
-      await add(unsaved[0].classNumber);
-      setQuery("");
-      return;
-    }
-    setHint(
-      sections.length === 0
-        ? "Nothing matches that this term."
-        : unsaved.length === 0
-          ? "Everything matching that is already saved."
-          : "More than one section matches — pick the one you're in below."
-    );
-  }
-
   const searching = hits.q !== q;
   const shownResults = searching ? [] : hits.courses;
 
@@ -190,21 +169,14 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
       )}
 
       <p className="mt-1 text-xs font-medium text-neutral-500">Search SFU courses</p>
-      <form onSubmit={addFromQuery} className="flex flex-wrap gap-2">
-        <input
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setHint(null); }}
-          placeholder="CMPT 225, MATH 151, calculus…"
-          className="min-w-48 flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-        />
-        <button
-          disabled={!searchable || searching || busy !== null}
-          className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
-        >
-          Add
-        </button>
-      </form>
-      {hint && <p className="text-xs text-neutral-500">{hint}</p>}
+      {/* Typing searches; the only Add that means anything is the one beside a
+          section, since a query like "cmpt 225" can't say which one you're in. */}
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="CMPT 225, MATH 151, calculus…"
+        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+      />
 
       {searchable && (
         <div className="max-h-72 overflow-y-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
@@ -224,9 +196,18 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
                     {c.sections.map((s) => {
                       const on = savedSet.has(s.classNumber);
                       return (
-                        <li key={s.classNumber} className="flex flex-wrap items-center gap-2 text-xs">
+                        <li
+                          key={s.classNumber}
+                          // On the row, not just the button: the times are what
+                          // you're reading when you want to see where it lands.
+                          onMouseEnter={() => onPreview?.({ course: courseCode(c), section: s })}
+                          onMouseLeave={() => onPreview?.(null)}
+                          onFocus={() => onPreview?.({ course: courseCode(c), section: s })}
+                          onBlur={() => onPreview?.(null)}
+                          className="flex flex-wrap items-center gap-2 text-xs"
+                        >
                           <button
-                            onClick={() => (on ? remove(s.classNumber) : add(s.classNumber))}
+                            onClick={() => { onPreview?.(null); return on ? remove(s.classNumber) : add(s.classNumber); }}
                             disabled={busy === s.classNumber}
                             className={`w-16 shrink-0 rounded-lg border px-2 py-1 font-medium transition-colors disabled:opacity-50 ${
                               on

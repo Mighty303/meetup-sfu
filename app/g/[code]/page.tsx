@@ -9,9 +9,10 @@ import { Avatar } from "@/components/Avatar";
 import { ColorPicker } from "@/components/ColorPicker";
 import { CoursePicker } from "@/components/CoursePicker";
 import { WeekGrid } from "@/components/WeekGrid";
-import { commonFree, partialFree } from "@/lib/overlap";
+import { blocksFromSection, commonFree, partialFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
 import { WEEKDAYS, formatTime, fromTermCode, scheduleBuilderUrl } from "@/lib/sfu";
+import type { SectionHit } from "@/lib/sfu";
 
 interface Member {
   id: number;
@@ -107,6 +108,8 @@ function GroupSchedule({ code }: { code: string }) {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  // The section under the cursor in the picker, sketched onto the grid.
+  const [preview, setPreview] = useState<{ course: string; section: SectionHit } | null>(null);
 
   const load = useCallback(async () => {
     // No minMinutes here: the page derives its own windows from busyByMember, so
@@ -223,6 +226,11 @@ function GroupSchedule({ code }: { code: string }) {
         ? commonFree({ members: schedules, dayStart: DAY_START, dayEnd: DAY_END, minMinutes: MIN_MINUTES })
         : [],
     [schedules, view]
+  );
+
+  const previewBlocks = useMemo(
+    () => (preview ? blocksFromSection(preview.course, preview.section) : []),
+    [preview]
   );
 
   // Windows where only part of the group can make it. Two people already on
@@ -465,6 +473,7 @@ function GroupSchedule({ code }: { code: string }) {
             memberId={me.id}
             classNumbers={me.classNumbers}
             onChange={load}
+            onPreview={setPreview}
           />
 
           <div className="flex items-center gap-3">
@@ -622,6 +631,8 @@ function GroupSchedule({ code }: { code: string }) {
         dayStart={DAY_START}
         dayEnd={DAY_END}
         solo={view === "mine"}
+        preview={previewBlocks}
+        previewColor={me?.color}
       />
 
       <section>

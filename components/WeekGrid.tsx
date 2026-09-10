@@ -194,9 +194,22 @@ interface Props {
   dayEnd: number;
   /** One person's week: labels drop the group framing. */
   solo?: boolean;
+  /** A section being considered, drawn over the week but not part of it. */
+  preview?: BusyBlock[];
+  /** Whose it would be — the preview borrows their colour. */
+  previewColor?: string;
 }
 
-export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo = false }: Props) {
+export function WeekGrid({
+  members,
+  busyByMember,
+  free,
+  dayStart,
+  dayEnd,
+  solo = false,
+  preview = [],
+  previewColor = "#737373",
+}: Props) {
   // Tracked in state rather than a CSS-only tooltip: the day columns clip their
   // overflow, so an in-flow tooltip would be cut off at the column edge. A
   // fixed-position card follows the cursor and escapes the clipping entirely.
@@ -414,6 +427,39 @@ export function WeekGrid({ members, busyByMember, free, dayStart, dayEnd, solo =
                       </div>
                     );
                   })}
+
+                  {/* Drawn over the week at full width and never packed with
+                      it: this section isn't yours yet, and squeezing the real
+                      blocks aside for something you might not add would make
+                      the grid jump under the cursor. */}
+                  {preview
+                    .filter((b) => b.day === day)
+                    .map((b, pi) => {
+                      const minutes = b.end - b.start;
+                      return (
+                        <div
+                          key={`preview-${pi}`}
+                          className="pointer-events-none absolute z-10 flex flex-col justify-center overflow-hidden rounded-md border-2 border-dashed px-1.5 py-1 leading-tight backdrop-blur-[1px]"
+                          style={{
+                            top: `calc(${pct(b.start)}% + ${GAP_Y / 2}px)`,
+                            height: `calc(${heightPct(minutes)}% - ${GAP_Y}px)`,
+                            left: GAP_X / 2,
+                            right: GAP_X / 2,
+                            borderColor: previewColor,
+                            backgroundColor: `${previewColor}59`,
+                          }}
+                        >
+                          <span className="truncate text-[10px] font-semibold text-white">
+                            {b.course}
+                          </span>
+                          {minutes >= 50 && (
+                            <span className="truncate text-[9px] font-medium text-white/90">
+                              {b.detail}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             );
