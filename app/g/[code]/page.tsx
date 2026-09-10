@@ -356,9 +356,13 @@ function GroupSchedule({ code }: { code: string }) {
               {isAdmin && view === "everyone" && (
                 <button
                   onClick={() => setDraftName(state.group.name)}
-                  className="text-xs text-neutral-500 underline-offset-2 hover:underline"
+                  // Nothing spells out what this does any more, so the icon has
+                  // to: a title for the pointer, an aria-label for a reader.
+                  aria-label="Rename group"
+                  title="Rename group"
+                  className="rounded-lg p-1.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
                 >
-                  Rename
+                  <PencilIcon />
                 </button>
               )}
             </div>
@@ -848,5 +852,25 @@ function GroupSchedule({ code }: { code: string }) {
         </section>
       )}
     </main>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="shrink-0"
+    >
+      <path d="M13.75 3.25l3 3-9.5 9.5-3.75.75.75-3.75 9.5-9.5z" />
+      <path d="M12.25 4.75l3 3" />
+    </svg>
   );
 }
