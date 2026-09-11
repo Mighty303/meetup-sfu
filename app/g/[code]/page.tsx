@@ -793,6 +793,10 @@ function GroupSchedule({ code }: { code: string }) {
             </button>
           ))}
         </div>
+
+        {/* Same row as the view toggle: these all act on the week on screen,
+            and "this week's free windows" means whichever week that is. */}
+        <CalendarTools groupCode={code} week={week} />
       </div>
 
       {view === "mine" && shown.length === 0 && (
@@ -825,10 +829,6 @@ function GroupSchedule({ code }: { code: string }) {
           previewColor={me?.color}
         />
       )}
-
-      {/* Under the grid, because "this week's free windows" means the week
-          on screen — the control belongs next to the thing it copies. */}
-      <CalendarTools groupCode={code} memberId={me?.id ?? null} week={week} />
 
       <section>
         <Collapsible
