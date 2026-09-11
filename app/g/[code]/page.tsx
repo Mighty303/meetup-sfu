@@ -460,7 +460,7 @@ function GroupSchedule({ code }: { code: string }) {
               readOnly
               value={shareUrl}
               onFocus={(e) => e.currentTarget.select()}
-              className="w-44 rounded-lg border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-600 sm:w-72 lg:w-96 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+              className="w-48 rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-sm text-neutral-600 sm:w-80 lg:w-[26rem] dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
             />
             <button
               onClick={() => {
@@ -469,11 +469,11 @@ function GroupSchedule({ code }: { code: string }) {
                 setTimeout(() => setCopyState("idle"), 2000);
                 navigator.clipboard?.writeText(shareUrl).catch(() => setCopyState("failed"));
               }}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
+              className="flex shrink-0 items-center gap-2 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium transition-colors hover:bg-neutral-100 active:scale-[0.98] dark:border-neutral-700 dark:hover:bg-neutral-800"
             >
               <svg
-                width="15"
-                height="15"
+                width="17"
+                height="17"
                 viewBox="0 0 20 20"
                 fill="none"
                 stroke="currentColor"
