@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AuthButton } from "./AuthButton";
+import { Logo } from "./Logo";
 
 export function NavBar() {
   return <Suspense fallback={<div className="h-16 border-b border-neutral-200 dark:border-neutral-800" />}><NavBarContent /></Suspense>;
@@ -64,9 +65,10 @@ function NavBarContent() {
       <div className="mx-auto flex w-full max-w-[1600px] items-center gap-x-1 p-3 sm:px-6">
         <Link
           href="/"
-          className="mr-2 text-base font-semibold tracking-tight hover:opacity-80"
+          aria-label="meetup-sfu home"
+          className="mr-2 transition-opacity hover:opacity-80"
         >
-          meetup<span className="text-neutral-400">-sfu</span>
+          <Logo />
         </Link>
 
         <div className="hidden items-center gap-x-1 sm:flex">{links}</div>

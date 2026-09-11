@@ -1,0 +1,21 @@
+<!--
+  Tab mark. Same family as sfucourses' favicon — its two-tone ring and black
+  disc, reused with permission — but the glyph is a week grid with one slot lit
+  rather than their S, so the two sites stay apart in a row of pinned tabs.
+
+  Colours are sfucourses' own tokens: sosy-green-500 and cyber-500 on
+  neutral-1100.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
+  <circle cx="18" cy="18" r="17" fill="#ffdf00" />
+  <!-- The upper-left half of the ring, split on the diagonal. -->
+  <path d="M30 6A17 17 0 0 0 6 30Z" fill="#24a98b" />
+  <circle cx="18" cy="18" r="12.5" fill="#191a1a" />
+  <g fill="#fff">
+    <rect x="10.5" y="10.5" width="6.5" height="6.5" rx="1.5" />
+    <rect x="19" y="10.5" width="6.5" height="6.5" rx="1.5" />
+    <rect x="10.5" y="19" width="6.5" height="6.5" rx="1.5" />
+  </g>
+  <!-- The slot everyone is free: the whole point of the site. -->
+  <rect x="19" y="19" width="6.5" height="6.5" rx="1.5" fill="#ffdf00" />
+</svg>
