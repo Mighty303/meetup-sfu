@@ -11,9 +11,9 @@ import { CoursePicker } from "@/components/CoursePicker";
 import { HeatGrid } from "@/components/HeatGrid";
 import { GroupPageSkeleton } from "@/components/Skeleton";
 import { WeekGrid } from "@/components/WeekGrid";
-import { blocksFromSection, commonFree, partialFree } from "@/lib/overlap";
+import { blocksFromSection, commonFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
-import { WEEKDAYS, formatTime, fromTermCode } from "@/lib/sfu";
+import { fromTermCode } from "@/lib/sfu";
 import type { SectionHit } from "@/lib/sfu";
 
 interface Member {
@@ -54,10 +54,6 @@ interface GroupState {
   termBounds: { start: string; end: string; typicalStart: string } | null;
 }
 
-const DAY_LABELS: Record<string, string> = {
-  Mo: "Monday", Tu: "Tuesday", We: "Wednesday", Th: "Thursday", Fr: "Friday",
-};
-
 /** Monday of the week containing `d`, as YYYY-MM-DD. */
 function mondayOf(d: Date): string {
   const m = new Date(d);
@@ -85,12 +81,6 @@ function shortDate(iso: string): string {
     month: "short",
     day: "numeric",
   });
-}
-
-/** Mon-first, so the list reads down the week. Unknown days sort last. */
-function dayOrder(day: string): number {
-  const i = (WEEKDAYS as readonly string[]).indexOf(day);
-  return i === -1 ? WEEKDAYS.length : i;
 }
 
 // Shorter than this isn't worth crossing campus for, and nobody was going to
@@ -129,7 +119,6 @@ function GroupSchedule({ code }: { code: string }) {
   // the group's own size decides (see `grid`, below the member counts).
   const gridParam = searchParams.get("grid");
   const pinnedGrid = gridParam === "detailed" || gridParam === "heat" ? gridParam : null;
-  const [showAllPartial, setShowAllPartial] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   // The section under the cursor in the picker, sketched onto the grid.
@@ -328,28 +317,6 @@ function GroupSchedule({ code }: { code: string }) {
     [preview]
   );
 
-  // Windows where only part of the group can make it. Two people already on
-  // campus is a real meetup, so those sort to the top; the full-group ones are
-  // dropped because they're listed on their own above.
-  const partial = useMemo(() => {
-    if (view === "mine") return [];
-    if (schedules.length < 3) return []; // with two, "some of you" is the same list
-    return partialFree({
-      members: schedules,
-      dayStart: DAY_START,
-      dayEnd: DAY_END,
-      minMinutes: MIN_MINUTES,
-    })
-      .filter((w) => !w.everyone)
-      .sort(
-        (a, b) =>
-          Number(b.onCampus.length >= 2) - Number(a.onCampus.length >= 2) ||
-          b.attendees.length - a.attendees.length ||
-          dayOrder(a.day) - dayOrder(b.day) ||
-          a.start - b.start
-      );
-  }, [schedules, view]);
-
   if (view === "mine" && authStatus === "loading") {
     return <GroupPageSkeleton solo />;
   }
@@ -378,10 +345,6 @@ function GroupSchedule({ code }: { code: string }) {
 
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/g/${code}` : "";
   const thisMonday = mondayOf(new Date());
-
-  // Only gaps wedged between classes are worth listing — nobody has to make a
-  // special trip for them.
-  const gaps = free.filter((w) => w.betweenClasses);
 
   // Pair each member with their untimetabled sections, dropping anyone who has
   // none — and anyone ticked off, since nothing else on the page counts them.
@@ -593,14 +556,6 @@ function GroupSchedule({ code }: { code: string }) {
             onPreview={setPreview}
           />
 
-          {/* Editing here is not local to this group, and finding that out by
-              accident in another one would be a nasty surprise. */}
-          <p className="text-xs text-neutral-500">
-            This is your {fromTermCode(state.group.term)} schedule — it&apos;s
-            shared with every group you&apos;re in that term, so you only enter
-            it once. Changes here show up in all of them.
-          </p>
-
           <div className="flex flex-wrap items-center gap-3">
             {error && <p className="text-sm text-amber-600">{error}</p>}
             {confirmLeave ? (
@@ -661,9 +616,15 @@ function GroupSchedule({ code }: { code: string }) {
         </div>
       )}
 
+      {/* The people and the week they add up to, side by side from `lg`. Ticking
+          someone off is a question asked *of* the grid, and with the list a
+          screen above it you had to scroll back and forth to see the answer.
+          Below `lg` there is no room for a second column, so they stack in the
+          old order and the list keeps its own multi-column layout. */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       {view === "everyone" && (
-      <section>
-        <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <aside className="flex flex-col gap-2 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-56 lg:shrink-0 xl:w-64">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="font-medium">Group List</h2>
           <p className="text-xs text-neutral-500">
             Click a name to toggle them out
@@ -677,7 +638,11 @@ function GroupSchedule({ code }: { code: string }) {
             </button>
           )}
         </div>
-        <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+        {/* The scroll lives on the list alone, so a long group scrolls under a
+            heading and a note that stay put. `min-h-0` because a flex child
+            defaults to its content's height and would push the column past the
+            viewport instead of scrolling inside it. */}
+        <ul className="grid gap-1.5 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-1 lg:overflow-y-auto xl:grid-cols-1">
           {state.members.map((m) => {
             const hasSchedule = scheduled.some((s) => s.id === m.id);
             const on = hasSchedule && !hidden.has(m.id);
@@ -752,19 +717,20 @@ function GroupSchedule({ code }: { code: string }) {
             reasons are different problems with different fixes, and one
             sentence covering all of them told nobody what to do next. */}
         {shown.length < 2 && (
-          <p className="mt-2 text-sm text-amber-600">
+          <p className="text-sm text-amber-600 lg:text-xs">
             {scheduled.length === 0
               ? "Nobody has added a schedule yet. Add yours above, then send someone the link at the top of this page — the grid fills in as people add theirs."
               : scheduled.length === 1
-                ? "Only one schedule so far, so the grid below is just that one week. Share the link at the top of this page; once a second person adds their classes, it starts showing when you're both free."
+                ? "Only one schedule so far, so the grid is just that one week. Share the link at the top of this page; once a second person adds their classes, it starts showing when you're both free."
                 : "Tick at least two people back on — one person alone has nothing to overlap with."}
           </p>
         )}
-      </section>
+      </aside>
       )}
 
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
       {!weekInTerm(thisMonday) && (
-        <p className="-mt-3 text-xs text-neutral-500">
+        <p className="text-xs text-neutral-500">
           Today falls outside {fromTermCode(state.group.term)}, so this starts at
           the first week of term.
         </p>
@@ -865,125 +831,18 @@ function GroupSchedule({ code }: { code: string }) {
         />
       )}
 
-      <section>
-        <Collapsible
-          title={view === "mine" ? "Your gaps between classes" : "Gaps between classes"}
-          count={gaps.length}
-          blurb={
-            view === "mine"
-              ? "Windows with a class on both sides — you're already on campus and have to stay."
-              : "Windows with a class on both sides, for everyone ticked on above. Names are the people who have class that day, so they're on campus already — anyone else would be making the trip specially."
-          }
-        >
-        {gaps.length === 0 ? (
-          <p className="text-sm text-neutral-500">
-            {view === "mine" ? "No hour-long gap between your classes this week" : "No hour-long gap this week for everyone ticked on"}
-            {partial.length > 0 && " — tick someone off, or take one of the part-group windows below"}
-            .
-          </p>
-        ) : (
-          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-            {gaps.map((w, i) => (
-              <li
-                key={i}
-                className={`rounded-lg border px-3 py-2 text-sm ${
-                  w.sharedCampus
-                    ? "border-emerald-500/60 bg-emerald-400/10"
-                    : "border-amber-500/50 bg-amber-300/10"
-                }`}
-              >
-                <div className="flex items-baseline gap-2">
-                  <span className="w-20 shrink-0 font-medium">{DAY_LABELS[w.day] ?? w.day}</span>
-                  <span className="tabular-nums">{formatTime(w.start)} – {formatTime(w.end)}</span>
-                  <span className="ml-auto text-xs text-neutral-500">
-                    {w.campuses.length === 0
-                      ? "anywhere"
-                      : w.sharedCampus
-                        ? w.campuses[0]
-                        : `split: ${w.campuses.join(" / ")}`}
-                  </span>
-                </div>
-                <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-300">
-                  {w.onCampus.length === 0
-                    ? "nobody has class this day — someone has to travel"
-                    : view === "mine"
-                      ? "you're on campus either side"
-                      : `on campus: ${w.onCampus.join(", ")}`}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        </Collapsible>
-      </section>
-
-      {partial.length > 0 && (
-        <section>
-          <Collapsible
-            title="Some of you free"
-            count={partial.length}
-            blurb="Windows the whole group can't make, but part of it can. Two people already on campus is a meetup nobody has to travel for, so those come first."
-          >
-          <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-            {(showAllPartial ? partial : partial.slice(0, 12)).map((w, i) => {
-              const onCampus = w.onCampus.length >= 2;
-              return (
-                <li
-                  key={i}
-                  className={`rounded-lg border px-3 py-2 text-sm ${
-                    onCampus
-                      ? "border-emerald-500/40 bg-emerald-400/5"
-                      : "border-neutral-200 dark:border-neutral-800"
-                  }`}
-                >
-                  <div className="flex items-baseline gap-2">
-                    <span className="w-20 shrink-0 font-medium">{DAY_LABELS[w.day] ?? w.day}</span>
-                    <span className="tabular-nums">{formatTime(w.start)} – {formatTime(w.end)}</span>
-                    <span className="ml-auto shrink-0 text-xs text-neutral-500">
-                      {w.attendees.length} of {shown.length}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 truncate text-xs text-neutral-600 dark:text-neutral-300">
-                    {w.attendees.join(", ")}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
-                    <span>
-                      {w.campuses.length === 0
-                        ? "anywhere"
-                        : w.sharedCampus
-                          ? w.campuses[0]
-                          : `split: ${w.campuses.join(" / ")}`}
-                    </span>
-                    {onCampus && (
-                      <span className="text-emerald-700 dark:text-emerald-400">
-                        · {w.onCampus.length} on campus
-                      </span>
-                    )}
-                    {w.betweenClasses && <span>· between classes</span>}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {partial.length > 12 && (
-            <button
-              onClick={() => setShowAllPartial((v) => !v)}
-              className="mt-2 text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-            >
-              {showAllPartial ? "Show fewer" : `Show all ${partial.length}`}
-            </button>
-          )}
-          </Collapsible>
-        </section>
-      )}
-
+      {/* Directly under the grid, because that is where you go looking for a
+          course you know someone is taking and can't find a block for. Set
+          further off than the column's own gap: the grid ends on a row of
+          empty evening cells, so a heading 24px under it reads as part of
+          Friday rather than as the next thing. */}
       {unscheduledMembers.length > 0 && (
-        <section>
+        <section className="my-6 sm:my-8">
           <h2 className="mb-1 font-medium">Async Classes</h2>
           <p className="mb-2 text-xs text-neutral-500">
             Online, async, co-op and independent study sections. They have no
             timetable slot, so they don&apos;t appear on the grid or affect the
-            free windows above.
+            shading.
           </p>
           <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {unscheduledMembers.map(([member, sections]) =>
@@ -1011,55 +870,10 @@ function GroupSchedule({ code }: { code: string }) {
           </ul>
         </section>
       )}
-    </main>
-  );
-}
+      </div>
+      </div>
 
-/**
- * A section folded away behind its own heading. Native <details>: keyboard and
- * screen-reader behaviour come for free, and taking it back out is deleting one
- * wrapper rather than unpicking state.
- *
- * Open when it has something in it. Folding the gap list away by default hid
- * the page's own answer behind a disclosure triangle — an empty one is worth
- * collapsing, a full one isn't. React only writes `open` to the DOM when the
- * prop changes, so closing it by hand sticks across the page's re-renders.
- */
-function Collapsible({
-  title,
-  count,
-  blurb,
-  children,
-}: {
-  title: string;
-  /** Shown on the closed row, so folding it away doesn't hide whether it's empty. */
-  count: number;
-  blurb: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <details open={count > 0} className="group">
-      <summary className="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-          className="shrink-0 translate-y-px text-neutral-400 transition-transform group-open:rotate-90"
-        >
-          <path d="M4 2l4 4-4 4" />
-        </svg>
-        <h2 className="font-medium">{title}</h2>
-        <span className="text-xs text-neutral-500">{count}</span>
-      </summary>
-      <p className="mt-1 mb-2 pl-5 text-xs text-neutral-500">{blurb}</p>
-      <div className="pl-5">{children}</div>
-    </details>
+    </main>
   );
 }
 
