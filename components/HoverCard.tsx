@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 export interface HoverCardData {
   title: string;
   subtitle?: string;
@@ -8,6 +10,37 @@ export interface HoverCardData {
   /** Cursor position, in viewport coordinates. */
   x: number;
   y: number;
+}
+
+/**
+ * The open card, and the two ways it closes that a mouse doesn't need.
+ *
+ * A tap fires the emulated mouseenter that opens the card, but a finger never
+ * leaves, so `onMouseLeave` never comes and the card would sit there over a
+ * band it has stopped describing. The next touch anywhere dismisses it — which
+ * on a desktop means a click also dismisses, and that's fine, since the mouse
+ * still has `onMouseLeave` for the ordinary case.
+ *
+ * Scrolling dismisses it too, and that one matters more than it looks: the card
+ * is `fixed`, so swiping the day track sideways would leave it hanging over a
+ * different day entirely. Captured, because the scroll that moves under it is
+ * the track's, not the page's.
+ */
+export function useHoverCard() {
+  const [card, setCard] = useState<HoverCardData | null>(null);
+
+  useEffect(() => {
+    if (!card) return;
+    const dismiss = () => setCard(null);
+    window.addEventListener("pointerdown", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+    };
+  }, [card]);
+
+  return [card, setCard] as const;
 }
 
 /**
