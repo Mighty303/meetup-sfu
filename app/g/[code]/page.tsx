@@ -745,58 +745,70 @@ function GroupSchedule({ code }: { code: string }) {
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <button
-          onClick={() => week && setWeek(addDays(week, -7))}
-          disabled={!canPage(-1)}
-          aria-label="Previous week"
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-lg leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
-        >
-          ←
-        </button>
-        <span className="min-w-[12rem] text-center text-lg font-medium tabular-nums">
-          {week ? `${shortDate(week)} – ${shortDate(addDays(week, 4))}` : "—"}
-        </span>
-        <button
-          onClick={() => week && setWeek(addDays(week, 7))}
-          disabled={!canPage(1)}
-          aria-label="Next week"
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-lg leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
-        >
-          →
-        </button>
-        {week !== thisMonday && weekInTerm(thisMonday) && (
-          <button
-            onClick={() => setWeek(thisMonday)}
-            className="ml-1 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-          >
-            This week
-          </button>
-        )}
-
-        {/* Two readings of the same week. Availability shades each half-hour by
-            how many people are free; detailed trades that for the labelled
-            blocks, which is what you want when checking one person's classes. */}
-        <div className="ml-1 flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
-          {(["heat", "detailed"] as const).map((mode) => (
+      {/* Three tracks so the date sits dead centre no matter what flanks it:
+          the "This week" button comes and goes, and the toggle is wider than
+          it, so putting either beside the arrows would drag the date off
+          centre. Below sm there is one wrapped, centred row instead. */}
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+        <div className="flex items-center gap-2 sm:justify-self-start">
+          {week !== thisMonday && weekInTerm(thisMonday) && (
             <button
-              key={mode}
-              onClick={() => setGrid(mode)}
-              aria-pressed={grid === mode}
-              className={`px-3 py-1.5 transition-colors ${
-                grid === mode
-                  ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900"
-                  : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              }`}
+              onClick={() => setWeek(thisMonday)}
+              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
             >
-              {mode === "detailed" ? "Detailed" : "Availability"}
+              This week
             </button>
-          ))}
+          )}
         </div>
 
-        {/* Same row as the view toggle: these all act on the week on screen,
-            and "this week's free windows" means whichever week that is. */}
-        <CalendarTools groupCode={code} memberId={me?.id ?? null} />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => week && setWeek(addDays(week, -7))}
+            disabled={!canPage(-1)}
+            aria-label="Previous week"
+            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-lg leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            ←
+          </button>
+          <span className="min-w-[12rem] text-center text-lg font-medium tabular-nums">
+            {week ? `${shortDate(week)} – ${shortDate(addDays(week, 4))}` : "—"}
+          </span>
+          <button
+            onClick={() => week && setWeek(addDays(week, 7))}
+            disabled={!canPage(1)}
+            aria-label="Next week"
+            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-lg leading-none transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            →
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap sm:justify-self-end">
+          {/* Two readings of the same week. Availability shades each half-hour
+              by how many people are free; detailed trades that for the
+              labelled blocks, which is what you want when checking one
+              person's classes. */}
+          <div className="flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
+            {(["heat", "detailed"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setGrid(mode)}
+                aria-pressed={grid === mode}
+                className={`px-3 py-1.5 transition-colors ${
+                  grid === mode
+                    ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900"
+                    : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                }`}
+              >
+                {mode === "detailed" ? "Detailed" : "Availability"}
+              </button>
+            ))}
+          </div>
+
+          {/* Same row as the view toggle: these all act on the week on screen,
+              and "this week's free windows" means whichever week that is. */}
+          <CalendarTools groupCode={code} memberId={me?.id ?? null} />
+        </div>
       </div>
 
       {view === "mine" && shown.length === 0 && (
