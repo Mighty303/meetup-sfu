@@ -150,26 +150,31 @@ export function DemoAvailability() {
         ))}
       </div>
 
-      {/* No weekStart on either: the "now" line belongs to a real week, and a
+      {/* Keyed on the view so React remounts on a switch and the fade runs
+          again — the point of the switch is that you notice it happened.
+
+          No weekStart on either: the "now" line belongs to a real week, and a
           demo that draws today's time on an invented one is just confusing. */}
-      {grid === "heat" ? (
-        <HeatGrid
-          members={PEOPLE}
-          busyByMember={busyByMember}
-          dayStart={DAY_START}
-          dayEnd={DAY_END}
-          columnHeight={DEMO_HEIGHT}
-        />
-      ) : (
-        <WeekGrid
-          members={PEOPLE}
-          busyByMember={busyByMember}
-          free={free}
-          dayStart={DAY_START}
-          dayEnd={DAY_END}
-          columnHeight={DEMO_HEIGHT}
-        />
-      )}
+      <div key={grid} className="fade-in">
+        {grid === "heat" ? (
+          <HeatGrid
+            members={PEOPLE}
+            busyByMember={busyByMember}
+            dayStart={DAY_START}
+            dayEnd={DAY_END}
+            columnHeight={DEMO_HEIGHT}
+          />
+        ) : (
+          <WeekGrid
+            members={PEOPLE}
+            busyByMember={busyByMember}
+            free={free}
+            dayStart={DAY_START}
+            dayEnd={DAY_END}
+            columnHeight={DEMO_HEIGHT}
+          />
+        )}
+      </div>
     </div>
   );
 }

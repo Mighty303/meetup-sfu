@@ -24,3 +24,58 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+/*
+ * Sections easing in on the home page, staggered by an inline animation-delay
+ * at each call site.
+ *
+ * `both` so the element holds the "from" state before its delay elapses —
+ * without it a staggered section flashes at full opacity, then disappears to
+ * animate in, which is worse than no animation at all.
+ *
+ * Slow enough to be read as an arrival rather than a repaint: at half this
+ * duration the whole page had settled before the eye reached the second
+ * block, which is the same as no animation at all. The travel stays modest —
+ * the page opens on a grid of fine rules and half-hour bands, and anything
+ * that slides far enough to really notice reads as the layout shifting.
+ */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/*
+ * Opacity only, for swapping one thing for another in place — the home page's
+ * two week views. They are pinned to the same height, so there is nothing to
+ * settle and a rise would read as the new view dropping in from somewhere.
+ */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fade-in 0.55s ease-out both;
+}
+
+/* Taken at its word: no movement, no fade, and nothing left at opacity 0. */
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .fade-in {
+    animation: none;
+  }
+}
