@@ -98,7 +98,7 @@ function Headline({ metrics: { totals } }: { metrics: AdminMetrics }) {
       <Stat label="Groups" value={totals.groups} hint={`${totals.newGroups7d} this week`} />
       <Stat label="Users" value={totals.users} hint={`${totals.newUsers7d} this week`} />
       <Stat
-        label="Signed in, 7d"
+        label="Active, 7d"
         value={totals.activeUsers7d}
         hint={`of ${totals.users} ever`}
       />
@@ -323,7 +323,7 @@ function GroupsSection({ metrics: { groups } }: { metrics: AdminMetrics }) {
               <th className="pb-2 text-right font-medium">Scheduled</th>
               <th className="pb-2 text-right font-medium">Courses</th>
               <th className="pb-2 pl-4 font-medium">Created</th>
-              <th className="pb-2 pl-4 font-medium">Last sign-in</th>
+              <th className="pb-2 pl-4 font-medium">Last seen</th>
             </tr>
           </thead>
           <tbody>
@@ -407,7 +407,18 @@ function UsersSection({ metrics: { users, totals } }: { metrics: AdminMetrics })
                 <td className="py-2 text-right tabular-nums">{u.groups}</td>
                 <td className="py-2 text-right tabular-nums text-neutral-500">{u.courseRows}</td>
                 <td className="py-2 pl-4 text-neutral-500">{ago(u.createdAt)}</td>
-                <td className="py-2 pl-4 text-neutral-500">{ago(u.lastSeen)}</td>
+                <td className="py-2 pl-4 text-neutral-500">
+                  {u.lastSeen ? (
+                    // Relative reads at a glance; the exact stamp is what you
+                    // actually want once a row looks wrong, so it sits on hover
+                    // rather than taking a column of its own.
+                    <span title={fullTime(u.lastSeen)}>{ago(u.lastSeen)}</span>
+                  ) : (
+                    <span title="No page view recorded since this was first tracked">
+                      never seen
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -533,7 +544,7 @@ function fullTime(iso: string): string {
   return new Date(iso).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" });
 }
 
-/** Coarse on purpose — the exact minute of a sign-in is never the question. */
+/** Coarse on purpose — the exact minute of a visit is never the question. */
 function ago(iso: string): string {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (minutes < 1) return "just now";

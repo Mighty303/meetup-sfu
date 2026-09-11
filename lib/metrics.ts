@@ -26,7 +26,7 @@ export interface Totals {
   cachedTerms: number;
   customAvatars: number;
   newUsers7d: number;
-  /** users.updated_at is bumped on every sign-in, so this is "signed in since". */
+  /** Distinct people who loaded a page in the last 7 days, per users.last_seen_at. */
   activeUsers7d: number;
   newGroups7d: number;
   membersWithCourses: number;
@@ -68,7 +68,7 @@ export interface GroupRow {
   signedIn: number;
   scheduled: number;
   courseRows: number;
-  /** Newest sign-in among its members — the closest thing to "last used". */
+  /** Newest visit by any of its members — the closest thing to "last used". */
   lastSeen: string | null;
 }
 
@@ -79,7 +79,8 @@ export interface UserRow {
   image: string | null;
   customAvatar: boolean;
   createdAt: string;
-  lastSeen: string;
+  /** Null for anyone who hasn't loaded a page since migration 006 added the column. */
+  lastSeen: string | null;
   groups: number;
   courseRows: number;
 }
@@ -151,7 +152,7 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
           (SELECT COUNT(*) FROM meetup.sections_cache) AS cached_terms,
           (SELECT COUNT(*) FROM meetup.users WHERE avatar IS NOT NULL) AS custom_avatars,
           (SELECT COUNT(*) FROM meetup.users WHERE created_at > NOW() - INTERVAL '7 days') AS new_users_7d,
-          (SELECT COUNT(*) FROM meetup.users WHERE updated_at > NOW() - INTERVAL '7 days') AS active_users_7d,
+          (SELECT COUNT(*) FROM meetup.users WHERE last_seen_at > NOW() - INTERVAL '7 days') AS active_users_7d,
           (SELECT COUNT(*) FROM meetup.groups WHERE created_at > NOW() - INTERVAL '7 days') AS new_groups_7d,
           (SELECT COUNT(DISTINCT member_id) FROM meetup.member_courses_effective) AS members_with_courses,
           (SELECT COUNT(DISTINCT user_id) FROM meetup.members WHERE user_id IS NOT NULL) AS users_in_groups
@@ -202,7 +203,7 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
                COUNT(DISTINCT m.user_id) AS signed_in,
                COUNT(DISTINCT ce.member_id) AS scheduled,
                COUNT(ce.class_number) AS course_rows,
-               MAX(u.updated_at) AS last_seen
+               MAX(u.last_seen_at) AS last_seen
         FROM meetup.groups g
         LEFT JOIN meetup.members m ON m.group_id = g.id
         LEFT JOIN meetup.member_courses_effective ce ON ce.member_id = m.id
@@ -218,11 +219,11 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
         SELECT u.id, u.email, u.name,
                COALESCE(u.avatar, u.image) AS image,
                (u.avatar IS NOT NULL) AS custom_avatar,
-               u.created_at, u.updated_at,
+               u.created_at, u.last_seen_at,
                (SELECT COUNT(*) FROM meetup.members m WHERE m.user_id = u.id) AS groups,
                (SELECT COUNT(*) FROM meetup.user_courses uc WHERE uc.user_id = u.id) AS course_rows
         FROM meetup.users u
-        ORDER BY u.updated_at DESC
+        ORDER BY u.last_seen_at DESC NULLS LAST, u.created_at DESC
       `,
 
       // Days with nothing still need a row, or the chart would compress gaps
@@ -326,7 +327,7 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
       image: (r.image as string | null) ?? null,
       customAvatar: !!r.custom_avatar,
       createdAt: iso(r.created_at),
-      lastSeen: iso(r.updated_at),
+      lastSeen: r.last_seen_at ? iso(r.last_seen_at) : null,
       groups: n(r.groups),
       courseRows: n(r.course_rows),
     })),
