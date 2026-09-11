@@ -124,12 +124,11 @@ function GroupSchedule({ code }: { code: string }) {
   // "mine" narrows the whole page to your own row: your classes at full width
   // and your own gaps, without everyone else's blocks to read past.
   const view = searchParams.get("view") === "mine" ? "mine" : "everyone";
-  // Availability — a LettuceMeet-style shading of how many people are free in
-  // each half-hour — is the default: it's the reading that answers "when can we
-  // meet", and the one that survives five clashing schedules. "detailed" opts
-  // back into the labelled blocks. In the URL so a reload — and a shared link —
-  // keeps whichever view you were reading.
-  const grid = searchParams.get("grid") === "detailed" ? "detailed" : "heat";
+  // Which of the two week views to draw, when the URL says. In the URL so a
+  // reload — and a shared link — keeps whichever view you were reading; absent,
+  // the group's own size decides (see `grid`, below the member counts).
+  const gridParam = searchParams.get("grid");
+  const pinnedGrid = gridParam === "detailed" || gridParam === "heat" ? gridParam : null;
   const [showAllPartial, setShowAllPartial] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -201,14 +200,17 @@ function GroupSchedule({ code }: { code: string }) {
   function pillHref(nextCode: string, nextView: "mine" | "everyone"): string {
     const params = new URLSearchParams();
     if (nextView === "mine") params.set("view", "mine");
-    if (grid === "detailed") params.set("grid", "detailed");
+    // The pin travels, the derived choice doesn't: carrying this group's answer
+    // into another one would pin a view the reader never picked.
+    if (pinnedGrid) params.set("grid", pinnedGrid);
     return `/g/${nextCode}${params.size > 0 ? `?${params}` : ""}`;
   }
 
   function setGrid(next: "detailed" | "heat") {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === "detailed") params.set("grid", "detailed");
-    else params.delete("grid");
+    // Both values are written, not just the non-default one: with no param the
+    // view is chosen by group size, so "clean URL" no longer means "heat".
+    params.set("grid", next);
     // replace, not push: toggling a view isn't a step you want to hit Back through.
     router.replace(`/g/${code}${params.size > 0 ? `?${params}` : ""}`, { scroll: false });
   }
@@ -285,6 +287,25 @@ function GroupSchedule({ code }: { code: string }) {
         : scheduled.filter((m) => !hidden.has(m.id)),
     [scheduled, hidden, view, me?.id]
   );
+
+  /**
+   * Two readings of the same week, and which one a group opens on depends on
+   * how many schedules are in it.
+   *
+   * Availability shades each band by how many people are free, and past two
+   * schedules it's the only view that survives the clash — that's why it used
+   * to be the flat default. But it draws no classes at all, so a group with one
+   * or two schedules in it opens on a heatmap of almost nothing, which is
+   * exactly the group every new user is looking at. The labelled blocks say
+   * what's actually in the way, so those come first until the third schedule
+   * lands. `view=mine` is one person by definition and always takes them.
+   *
+   * `?grid=` overrides either way, and `scheduled` is known before the first
+   * render — the page is gated on `state` below — so this never flips under
+   * the reader.
+   */
+  const grid: "detailed" | "heat" =
+    pinnedGrid ?? (view === "mine" || scheduled.length < 3 ? "detailed" : "heat");
 
   const schedules = useMemo(
     () => shown.map((m) => ({ name: m.displayName, busy: state?.busyByMember[m.id] ?? [] })),
@@ -643,10 +664,9 @@ function GroupSchedule({ code }: { code: string }) {
       {view === "everyone" && (
       <section>
         <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="font-medium">Who&apos;s in</h2>
+          <h2 className="font-medium">Group List</h2>
           <p className="text-xs text-neutral-500">
-            Tick someone off and the grid and windows below recompute without
-            them — useful when one schedule is blocking every slot.
+            Click a name to toggle them out
           </p>
           {shown.length < scheduled.length && (
             <button
@@ -728,11 +748,16 @@ function GroupSchedule({ code }: { code: string }) {
             );
           })}
         </ul>
+        {/* Why the grid below isn't answering the question yet. The three
+            reasons are different problems with different fixes, and one
+            sentence covering all of them told nobody what to do next. */}
         {shown.length < 2 && (
           <p className="mt-2 text-sm text-amber-600">
-            {scheduled.length < 2
-              ? "Two people need a saved schedule before there's an overlap to find."
-              : "Tick at least two people back on — one person alone has nothing to overlap with."}
+            {scheduled.length === 0
+              ? "Nobody has added a schedule yet. Add yours above, then send someone the link at the top of this page — the grid fills in as people add theirs."
+              : scheduled.length === 1
+                ? "Only one schedule so far, so the grid below is just that one week. Share the link at the top of this page; once a second person adds their classes, it starts showing when you're both free."
+                : "Tick at least two people back on — one person alone has nothing to overlap with."}
           </p>
         )}
       </section>
@@ -784,10 +809,8 @@ function GroupSchedule({ code }: { code: string }) {
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap sm:justify-self-end">
-          {/* Two readings of the same week. Availability shades each half-hour
-              by how many people are free; detailed trades that for the
-              labelled blocks, which is what you want when checking one
-              person's classes. */}
+          {/* Two readings of the same week, and picking one here pins it —
+              otherwise `grid` above decides from how many schedules are in. */}
           <div className="flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
             {(["heat", "detailed"] as const).map((mode) => (
               <button
@@ -993,9 +1016,14 @@ function GroupSchedule({ code }: { code: string }) {
 }
 
 /**
- * A section folded away behind its own heading, closed until you ask for it.
- * Native <details>: keyboard and screen-reader behaviour come for free, and
- * taking it back out is deleting one wrapper rather than unpicking state.
+ * A section folded away behind its own heading. Native <details>: keyboard and
+ * screen-reader behaviour come for free, and taking it back out is deleting one
+ * wrapper rather than unpicking state.
+ *
+ * Open when it has something in it. Folding the gap list away by default hid
+ * the page's own answer behind a disclosure triangle — an empty one is worth
+ * collapsing, a full one isn't. React only writes `open` to the DOM when the
+ * prop changes, so closing it by hand sticks across the page's re-renders.
  */
 function Collapsible({
   title,
@@ -1010,7 +1038,7 @@ function Collapsible({
   children: React.ReactNode;
 }) {
   return (
-    <details className="group">
+    <details open={count > 0} className="group">
       <summary className="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
         <svg
           width="12"
