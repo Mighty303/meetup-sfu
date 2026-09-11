@@ -25,6 +25,16 @@ interface Props {
   onPreview?: (hit: { course: string; section: SectionHit } | null) => void;
 }
 
+/** Sized to the button's text so swapping one for the other moves nothing. */
+function Spinner() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden className="animate-spin">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+      <path d="M8 2a6 6 0 016 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function courseCode(c: CourseHit): string {
   return `${c.dept} ${c.number}`;
 }
@@ -113,6 +123,52 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
   const searching = hits.q !== q;
   const shownResults = searching ? [] : hits.courses;
 
+  /**
+   * The section Enter would add: the only one on screen, and not already in.
+   *
+   * "Exactly one" is counted across sections, not courses — a search that
+   * turns up one course with a lecture and two tutorials is three answers, and
+   * picking one of them for you would be a guess. Null the rest of the time,
+   * which is also what hides the hint under the box.
+   */
+  const flat = shownResults.flatMap((c) =>
+    c.sections.map((s) => ({ course: courseCode(c), section: s }))
+  );
+  const only = flat.length === 1 && !savedSet.has(flat[0].section.classNumber) ? flat[0] : null;
+
+  /**
+   * Enter adds the one section on screen.
+   *
+   * People type a code they already know and hit Enter in the same breath,
+   * well inside the 250ms debounce, so the keystroke usually lands before any
+   * results do. Rather than drop it — which would make the shortcut feel
+   * broken at exactly the speed it's meant for — Enter runs the search itself
+   * and skips whatever is left of the debounce. Should the debounced fetch
+   * land too it carries the same answer for the same query.
+   *
+   * Enter never removes. Taking a section out on a keystroke is not a thing to
+   * do by accident, so an already-added match is left alone.
+   */
+  async function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter" || !searchable) return;
+    e.preventDefault();
+    if (only) { add(only.section.classNumber); return; }
+    // Results are in and they're ambiguous, or empty. Nothing Enter can mean.
+    if (!searching) return;
+
+    const pending = q;
+    const res = await fetch(`/api/terms/${term}/courses?q=${encodeURIComponent(pending)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const courses: CourseHit[] = res?.courses ?? [];
+    setHits({ q: pending, courses });
+
+    const matches = courses.flatMap((c) => c.sections);
+    if (matches.length === 1 && !savedSet.has(matches[0].classNumber)) {
+      add(matches[0].classNumber);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs font-medium text-neutral-500">Your courses</p>
@@ -144,8 +200,9 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
       )}
 
       <p className="mt-1 text-xs font-medium text-neutral-500">Search SFU courses</p>
-      {/* Typing searches; the only Add that means anything is the one beside a
-          section, since a query like "cmpt 225" can't say which one you're in. */}
+      {/* Typing searches. Enter adds, but only when the results leave no room
+          for doubt — a query like "cmpt 225" matches a lecture and its
+          tutorials, and there is no way to tell which of them you're in. */}
       <div className="relative">
         <svg
           width="16"
@@ -164,10 +221,20 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onSearchKeyDown}
           placeholder="CMPT 225, MATH 151, calculus…"
           className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-3 text-sm dark:border-neutral-700 dark:bg-neutral-900"
         />
       </div>
+
+      {/* Only when there is one answer, so the line is never a promise the
+          keystroke won't keep. */}
+      {only && (
+        <p className="text-xs text-neutral-500">
+          Press <kbd className="rounded border border-neutral-300 px-1 font-sans text-[10px] dark:border-neutral-700">Enter</kbd>{" "}
+          to add <span className="font-medium text-neutral-700 dark:text-neutral-300">{only.course} {only.section.section}</span>
+        </p>
+      )}
 
       {searchable && (
         <div className="max-h-72 overflow-y-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
@@ -200,13 +267,23 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
                           <button
                             onClick={() => { onPreview?.(null); return on ? remove(s.classNumber) : add(s.classNumber); }}
                             disabled={busy === s.classNumber}
-                            className={`w-16 shrink-0 rounded-lg border px-2 py-1 font-medium transition-colors disabled:opacity-50 ${
+                            className={`flex w-16 shrink-0 items-center justify-center rounded-lg border px-2 py-1 font-medium transition-colors disabled:opacity-50 ${
                               on
                                 ? "border-neutral-300 text-neutral-500 hover:border-red-400 hover:text-red-600 dark:border-neutral-700"
                                 : "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900"
                             }`}
                           >
-                            {on ? "Added" : "Add"}
+                            {/* The round trip writes to the term schedule and
+                                then reloads the whole group, so it is long
+                                enough to look like a click that missed. The
+                                button keeps its width, so nothing reflows. */}
+                            {busy === s.classNumber ? (
+                              <Spinner />
+                            ) : on ? (
+                              "Added"
+                            ) : (
+                              "Add"
+                            )}
                           </button>
                           <span className="font-medium">{s.section}</span>
                           <span className="text-neutral-500">{meetingLabel(s)}</span>
