@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CourseHit, SectionHit } from "@/lib/sfu";
 
 interface Props {
@@ -55,6 +55,9 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
   const [saved, setSaved] = useState<CourseHit[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Clearing puts the cursor back in the box: the button is a shortcut to
+  // typing a new query, not a way out of the search.
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const savedSet = new Set(classNumbers);
   // Results belong to whatever is in the box now; a stale list from the
@@ -219,12 +222,39 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
           <path d="M13.2 13.2L17 17" />
         </svg>
         <input
+          ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onSearchKeyDown}
           placeholder="CMPT 225, MATH 151, calculus…"
-          className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-3 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+          // Right padding is there whether or not the button is, so the text
+          // doesn't shift under the cursor on the first and last keystroke.
+          className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-9 text-sm dark:border-neutral-700 dark:bg-neutral-900"
         />
+        {query !== "" && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              inputRef.current?.focus();
+            }}
+            aria-label="Clear search"
+            className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Only when there is one answer, so the line is never a promise the
