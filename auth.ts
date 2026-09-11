@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { isAdminEmail } from "@/lib/admin";
+import { touchLastSeen } from "@/lib/last-seen";
 import { getUser, upsertUser } from "@/lib/users";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -32,6 +33,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (typeof token.appUserId === "number") {
         session.appUserId = token.appUserId;
+        // Every server-side session resolution comes through here, which makes
+        // it the one hook that sees an ordinary page view rather than only a
+        // sign-in. It schedules the write for after the response and throttles
+        // itself, so this stays a synchronous no-op on the common path.
+        touchLastSeen(token.appUserId);
       }
       // Computed here rather than stamped on the token at sign-in, so adding an
       // address to the allowlist takes effect without everyone signing out
