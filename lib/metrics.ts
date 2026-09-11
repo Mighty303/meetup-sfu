@@ -5,7 +5,6 @@
 // own catalogs. Nothing here writes.
 
 import { getDb } from "./db";
-import { indexByClassNumber, type CourseWithSections } from "./sfu";
 
 /** Neon's free tier. Override once the project moves to a paid plan. */
 const STORAGE_LIMIT_BYTES = Number(process.env.DB_STORAGE_LIMIT_BYTES) || 512 * 1024 * 1024;
@@ -359,6 +358,9 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
  * Turn class numbers into course names using the cached term dumps only — the
  * portal never triggers an upstream fetch, so opening it can't be what makes a
  * cold term take ten seconds. An unresolved number just prints as itself.
+ *
+ * Postgres does the lookup and returns one short label row per number. Selecting
+ * the payloads to index them here would move several MB to name twelve courses.
  */
 async function labelCourses(
   rows: { term: string; classNumber: string; members: number }[]
@@ -367,24 +369,29 @@ async function labelCourses(
 
   const sql = getDb();
   const terms = [...new Set(rows.map((r) => r.term))];
-  const cached = await sql`
-    SELECT term, payload FROM meetup.sections_cache WHERE term = ANY(${terms}::text[])
+  const numbers = [...new Set(rows.map((r) => r.classNumber))];
+
+  const labels = await sql`
+    SELECT sc.term,
+           s->>'classNumber' AS class_number,
+           (c->>'dept') || ' ' || (c->>'number') || ' ' || (s->>'section') AS label
+    FROM meetup.sections_cache sc,
+         LATERAL jsonb_array_elements(sc.payload) c,
+         LATERAL jsonb_array_elements(c->'sections') s
+    WHERE sc.term = ANY(${terms}::text[])
+      AND s->>'classNumber' = ANY(${numbers}::text[])
   `;
 
-  const byTerm = new Map<string, ReturnType<typeof indexByClassNumber>>();
-  for (const row of cached) {
-    byTerm.set(row.term as string, indexByClassNumber(row.payload as CourseWithSections[]));
+  // class_number is only unique within a term, so the key carries both.
+  const byKey = new Map<string, string>();
+  for (const row of labels) {
+    byKey.set(`${row.term}:${row.class_number}`, row.label as string);
   }
 
-  return rows.map((r) => {
-    const hit = byTerm.get(r.term)?.get(r.classNumber);
-    return {
-      ...r,
-      label: hit
-        ? `${hit.course.dept} ${hit.course.number} ${hit.section.section}`
-        : r.classNumber,
-    };
-  });
+  return rows.map((r) => ({
+    ...r,
+    label: byKey.get(`${r.term}:${r.classNumber}`) ?? r.classNumber,
+  }));
 }
 
 export function formatBytes(bytes: number): string {

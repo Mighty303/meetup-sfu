@@ -1,11 +1,10 @@
 import { getDb } from "./db";
-import { getTermSections } from "./sections";
-import { indexByClassNumber, type DayKey } from "./sfu";
+import { sectionIndexForClassNumbers, termBoundsFor } from "./sections";
+import { type DayKey } from "./sfu";
 import {
   busyFromCourses,
   clampWeekToTerm,
   commonFree,
-  termBounds,
   unscheduledFromCourses,
   weekDates,
   type TermBounds,
@@ -342,9 +341,11 @@ export async function getGroupState(
     WHERE m.group_id = ${group.id}
   `;
 
-  const courses = await getTermSections(group.term);
-  const index = indexByClassNumber(courses);
-  const bounds = termBounds(courses);
+  // Only the sections this group actually saved, resolved inside Postgres — a
+  // group page used to drag the entire 1.7 MB term dump across for this.
+  const saved = [...new Set(members.flatMap((m) => m.classNumbers))];
+  const index = await sectionIndexForClassNumbers(group.term, saved);
+  const bounds = await termBoundsFor(group.term);
   const week = clampWeekToTerm(opts.week, bounds);
   const dates = weekDates(week);
 
