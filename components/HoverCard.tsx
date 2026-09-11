@@ -2,10 +2,19 @@
 
 import { useEffect, useState } from "react";
 
+/**
+ * A row on the card. A plain string is a sentence and reads as one; the
+ * `{ label, value }` form is the "In class: Ann, Bo" shape, where the label is
+ * a category you skim past and the value is the thing you came to read. Split
+ * so the two can be weighted differently — flat grey rows of equal emphasis
+ * meant finding one name in a six-line card was a linear scan.
+ */
+export type HoverLine = string | { label: string; value: string };
+
 export interface HoverCardData {
   title: string;
   subtitle?: string;
-  lines: string[];
+  lines: HoverLine[];
   accent: string;
   /** Cursor position, in viewport coordinates. */
   x: number;
@@ -53,9 +62,9 @@ export function HoverCard({ card }: { card: HoverCardData }) {
     <div
       // Offset from the cursor, and pulled left near the right edge so it
       // stays on screen.
-      className="pointer-events-none fixed z-50 w-max max-w-[240px] rounded-lg border border-neutral-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95"
+      className="pointer-events-none fixed z-50 w-max max-w-[280px] rounded-lg border border-neutral-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95"
       style={{
-        left: Math.min(card.x + 14, (typeof window !== "undefined" ? window.innerWidth : 1200) - 260),
+        left: Math.min(card.x + 14, (typeof window !== "undefined" ? window.innerWidth : 1200) - 300),
         top: card.y + 14,
       }}
     >
@@ -66,11 +75,18 @@ export function HoverCard({ card }: { card: HoverCardData }) {
         </span>
         {card.subtitle && <span className="text-xs text-neutral-500">{card.subtitle}</span>}
       </div>
-      {card.lines.map((line, i) => (
-        <div key={i} className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-300">
-          {line}
-        </div>
-      ))}
+      {card.lines.map((line, i) =>
+        typeof line === "string" ? (
+          <div key={i} className="mt-0.5 text-xs leading-snug text-neutral-700 dark:text-neutral-300">
+            {line}
+          </div>
+        ) : (
+          <div key={i} className="mt-0.5 text-xs leading-snug">
+            <span className="text-neutral-500 dark:text-neutral-400">{line.label}: </span>
+            <span className="font-medium text-neutral-900 dark:text-neutral-100">{line.value}</span>
+          </div>
+        )
+      )}
     </div>
   );
 }

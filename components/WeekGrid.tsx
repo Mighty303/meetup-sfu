@@ -29,7 +29,11 @@ function freeStyle(w: FreeWindow, solo: boolean) {
       strong: "text-neutral-600 dark:text-neutral-300",
       soft: "text-neutral-500 dark:text-neutral-400",
       accent: "#a3a3a3",
-      tag: "FREE",
+      // Was "FREE", which was the most encouraging word on the page sitting on
+      // the one band worth skipping — and a flat contradiction of the legend
+      // three lines above it. Worded as the legend's own swatch now, so the key
+      // and the block say the same thing.
+      tag: "NOBODY ON CAMPUS",
     };
   }
   return w.sharedCampus
@@ -38,16 +42,18 @@ function freeStyle(w: FreeWindow, solo: boolean) {
         strong: "text-emerald-800 dark:text-emerald-200",
         soft: "text-emerald-800/80 dark:text-emerald-200/80",
         accent: "#10b981",
-        // "ALL FREE" is about the group; with one schedule on screen there
-        // is no group, just a gap in your own day.
-        tag: solo ? "GAP" : "GAP · ALL FREE",
+        // The group's version says what the colour means; the solo one says
+        // what the band is, because with one schedule on screen there is no
+        // group, just a gap in your own day. "GAP · ALL FREE" was shorthand
+        // that assumed you already knew how the grid worked.
+        tag: solo ? "BETWEEN CLASSES" : "EVERYONE FREE",
       }
     : {
         box: "bg-amber-300/25 ring-2 ring-inset ring-amber-500/50",
         strong: "text-amber-800 dark:text-amber-200",
         soft: "text-amber-800/80 dark:text-amber-200/80",
         accent: "#f59e0b",
-        tag: solo ? "GAP" : "GAP · SPLIT",
+        tag: solo ? "BETWEEN CLASSES" : "SPLIT CAMPUS",
       };
 }
 
@@ -234,7 +240,7 @@ export function WeekGrid({
         .map((block) => ({ member, block }))
     );
     // Merging happens after the member filter, so unticking someone in
-    // "Who's in" splits a shared block back apart on the same render.
+    // the group list splits a shared block back apart on the same render.
     placedByDay.set(day, packDay(mergeSameSection(entries)));
   }
 
@@ -261,9 +267,9 @@ export function WeekGrid({
       >
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
           {[
-            { box: "bg-emerald-400/30 ring-2 ring-inset ring-emerald-500/60", label: solo ? "Gap between classes" : "Gap · everyone free" },
-            ...(solo ? [] : [{ box: "bg-amber-300/25 ring-2 ring-inset ring-amber-500/50", label: "Gap · split campus" }]),
-            { box: "bg-neutral-400/10 ring-1 ring-inset ring-neutral-400/30", label: "Free, but nobody's on campus" },
+            { box: "bg-emerald-400/30 ring-2 ring-inset ring-emerald-500/60", label: solo ? "Between classes" : "Everyone free" },
+            ...(solo ? [] : [{ box: "bg-amber-300/25 ring-2 ring-inset ring-amber-500/50", label: "Split campus" }]),
+            { box: "bg-neutral-400/10 ring-1 ring-inset ring-neutral-400/30", label: "Nobody on campus" },
           ].map((k) => (
             <span key={k.label} className="flex items-center gap-1 text-neutral-500">
               <span className={`h-3.5 w-6 rounded-sm ${k.box}`} />
@@ -354,13 +360,19 @@ export function WeekGrid({
                             lines: [
                               `${formatTime(w.start)} – ${formatTime(w.end)} · ${formatDuration(minutes)}`,
                               w.onCampus.length === 0
-                                ? solo ? "You have no classes this day" : "Nobody has class this day — someone has to travel"
-                                : `On campus: ${w.onCampus.join(", ")}`,
-                              w.campuses.length === 0
-                                ? "No campus anchor — meet anywhere"
-                                : w.sharedCampus
-                                  ? `${solo ? "You're" : "Everyone"} near ${w.campuses[0]}`
-                                  : `Split across ${w.campuses.join(" and ")}`,
+                                ? solo ? "You have no class this day" : "Nobody has class this day — someone has to travel"
+                                // Present tense only when they're actually there:
+                                // outside the gaps this window is before the first
+                                // class or after the last, and campus has emptied.
+                                : {
+                                    label: w.betweenClasses ? "On campus" : "Has class today",
+                                    value: w.onCampus.join(", "),
+                                  },
+                              // Only the split is worth a row: one campus is
+                              // the ordinary case, and saying it on every card
+                              // is a line you learn to skip. Two means they
+                              // can't actually meet.
+                              ...(w.sharedCampus ? [] : [`Split across ${w.campuses.join(" and ")}`]),
                             ],
                             accent: tone.accent,
                             x: e.clientX,
@@ -382,13 +394,19 @@ export function WeekGrid({
                             </span>
                             {/* Who's already on campus matters more than where,
                                 so names take the next line and the campus only
-                                shows when the block is tall enough for both. */}
-                            {minutes >= 90 && w.onCampus.length > 0 && (
+                                shows when the block is tall enough for both.
+
+                                Neither line belongs on the grey band: those
+                                names are people who have class *that day*, and
+                                printing them under "NOBODY ON CAMPUS" reads as
+                                a flat contradiction. The hover still says who,
+                                with the wording that tense needs. */}
+                            {w.betweenClasses && minutes >= 90 && w.onCampus.length > 0 && (
                               <span className={`w-full truncate text-[10px] font-medium ${tone.strong}`}>
                                 {nameList(w.onCampus)}
                               </span>
                             )}
-                            {minutes >= 130 && w.campuses.length > 0 && (
+                            {w.betweenClasses && minutes >= 130 && w.campuses.length > 0 && (
                               <span className={`text-[10px] ${tone.soft}`}>
                                 {w.campuses.join(" / ")}
                               </span>
