@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { addMember, findGroup, findMemberForUser } from "@/lib/groups";
-import { getUser } from "@/lib/users";
+import { addMember, defaultMemberName, findGroup, findMemberForUser } from "@/lib/groups";
 
 export async function POST(
   req: Request,
@@ -25,11 +24,10 @@ export async function POST(
 
   // Default to the Google name; the member can rename themselves afterwards.
   const body = await req.json().catch(() => ({}));
-  const user = await getUser(session.appUserId);
   const displayName =
     typeof body.displayName === "string" && body.displayName.trim()
       ? body.displayName.trim().slice(0, 60)
-      : (user?.name ?? user?.email ?? "Member").slice(0, 60);
+      : await defaultMemberName(session.appUserId);
 
   try {
     const member = await addMember(group.id, displayName, session.appUserId);

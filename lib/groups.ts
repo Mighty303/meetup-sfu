@@ -1,5 +1,6 @@
 import { getDb } from "./db";
 import { sectionIndexForClassNumbers, termBoundsFor } from "./sections";
+import { getUser } from "./users";
 import { type DayKey } from "./sfu";
 import {
   busyFromCourses,
@@ -105,6 +106,19 @@ export async function findGroup(code: string): Promise<Group | null> {
     SELECT id, code, name, term, owner_user_id FROM meetup.groups WHERE code = ${code}
   `;
   return rows[0] ? toGroup(rows[0]) : null;
+}
+
+/**
+ * What to call someone in a group before they rename themselves.
+ *
+ * Shared by joining and by creating, because creating a group now joins you to
+ * it: two paths that put a person in a group under two different names is the
+ * kind of bug nobody notices until one of them is wrong. Capped at the
+ * display_name column's 60.
+ */
+export async function defaultMemberName(userId: number): Promise<string> {
+  const user = await getUser(userId);
+  return (user?.name ?? user?.email ?? "Member").slice(0, 60);
 }
 
 export async function addMember(

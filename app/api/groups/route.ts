@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createGroup } from "@/lib/groups";
+import { addMember, createGroup, defaultMemberName } from "@/lib/groups";
 import { currentTermCode } from "@/lib/sfu";
 
 export async function POST(req: Request) {
@@ -18,5 +18,24 @@ export async function POST(req: Request) {
       : currentTermCode(),
     session?.appUserId ?? null
   );
+
+  // Starting a group is joining it. Without this the creator was pushed to
+  // their own group and told they weren't in it, the group was missing from
+  // "Your groups" until they pressed Join, and My Schedule claimed they hadn't
+  // joined anything — while they were, the whole time, its admin.
+  //
+  // Not in the same transaction as the insert above, and it doesn't need to be:
+  // the neon HTTP driver can't interleave JS inside one, and the failure this
+  // would guard against — a group with no member row — is exactly the state
+  // every group was in before, which the Join button still recovers from.
+  if (session?.appUserId) {
+    try {
+      await addMember(group.id, await defaultMemberName(session.appUserId), session.appUserId);
+    } catch {
+      // The group exists and they own it; joining is recoverable from the page
+      // itself, so a failure here isn't worth failing the creation over.
+    }
+  }
+
   return NextResponse.json(group, { status: 201 });
 }
