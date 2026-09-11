@@ -15,6 +15,11 @@ declare module "next-auth/jwt" {
     appUserId?: number;
     /** The picture they chose, if any. Null once they've reverted to Google's. */
     avatar?: string | null;
+    /**
+     * Which door they came in by. Only the Google one carries a verified
+     * address, and the admin allowlist is an address list — see lib/admin.ts.
+     */
+    hasGoogle?: boolean;
   }
 }
 

@@ -34,8 +34,9 @@ export interface AdminIdentity {
  *
  * Nothing here trusts the client. The id arrives on a JWT signed with
  * AUTH_SECRET, and the email it resolves to is read from our own users row,
- * which is only ever written from Google's verified profile at sign-in. So a
- * spoof needs both the signing secret and the Google account.
+ * which for a Google account is only ever written from Google's verified
+ * profile at sign-in. So a spoof needs both the signing secret and the Google
+ * account.
  *
  * The session is passed in rather than read here, so this module never imports
  * auth.ts — auth.ts imports the allowlist below for the nav flag.
@@ -49,6 +50,12 @@ export async function adminFor(appUserId: number | null | undefined): Promise<Ad
   `;
   const row = rows[0];
   if (!row) return null;
+
+  // Google accounts only, unconditionally. A password account's address is
+  // self-asserted — nothing mails it to check — so an allowlisted address on
+  // one of those means somebody typed it, not that they hold it. Without this
+  // line the allowlist would be a registration form.
+  if (!row.google_sub) return null;
 
   const email = String(row.email ?? "").toLowerCase();
   if (!ADMIN_EMAILS.includes(email)) return null;
