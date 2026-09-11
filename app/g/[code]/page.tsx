@@ -796,7 +796,7 @@ function GroupSchedule({ code }: { code: string }) {
 
         {/* Same row as the view toggle: these all act on the week on screen,
             and "this week's free windows" means whichever week that is. */}
-        <CalendarTools groupCode={code} week={week} />
+        <CalendarTools groupCode={code} memberId={me?.id ?? null} />
       </div>
 
       {view === "mine" && shown.length === 0 && (
@@ -878,17 +878,6 @@ function GroupSchedule({ code }: { code: string }) {
               </li>
             ))}
           </ul>
-        )}
-        {gaps.length > 0 && (
-          /* Sits with the windows rather than only in the member panel, so it
-             works for anyone holding the invite code — the route is open for
-             the same reason the group page is. */
-          <a
-            href={`/api/groups/${code}/calendar?gaps=1${week ? `&week=${week}` : ""}`}
-            className="mt-2 inline-block text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-          >
-            Add these to a calendar (.ics)
-          </a>
         )}
         </Collapsible>
       </section>

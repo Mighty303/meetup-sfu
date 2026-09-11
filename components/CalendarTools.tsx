@@ -2,12 +2,12 @@
 
 interface Props {
   groupCode: string;
-  /** Monday of the week on screen — the export follows the grid. */
-  week: string | null;
+  /** Null when you're not in this group: there's no schedule of yours to take. */
+  memberId: number | null;
 }
 
 /**
- * Taking the week's free windows out to the calendar somebody already lives in.
+ * Taking your classes out to the calendar you already live in.
  *
  * A plain link, not a fetch: the route sends `Content-Disposition: attachment`,
  * so the browser saves the file itself and there is no blob to build or revoke.
@@ -15,18 +15,21 @@ interface Props {
  * It sits in the week controls beside the view toggle, so the label has to stay
  * short — the arrow carries the "this downloads a file" half of the meaning
  * that "(.ics)" was carrying before.
+ *
+ * No week parameter: classes recur to the end of term, so this is the whole
+ * term's timetable rather than whichever week happens to be on screen.
  */
-export function CalendarTools({ groupCode, week }: Props) {
-  const href = `/api/groups/${groupCode}/calendar` + (week ? `?week=${week}` : "");
+export function CalendarTools({ groupCode, memberId }: Props) {
+  if (memberId === null) return null;
 
   return (
     <a
-      href={href}
-      title="Download this week's free windows as an .ics calendar file"
+      href={`/api/groups/${groupCode}/members/${memberId}/calendar`}
+      title="Download your classes this term as an .ics calendar file"
       className="flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
     >
       <CalendarIcon />
-      Free windows
+      My classes
       <DownloadIcon />
     </a>
   );
