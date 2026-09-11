@@ -26,7 +26,10 @@ export function CalendarTools({ groupCode, memberId }: Props) {
     <a
       href={`/api/groups/${groupCode}/members/${memberId}/calendar`}
       title="Download your classes this term as an .ics calendar file"
-      className="flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+      // shrink-0 and nowrap because this sits in a flex row that runs out of
+      // room: without them the label broke across two lines and made the whole
+      // control row taller than everything beside it.
+      className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-300 px-3 py-1.5 text-sm transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
     >
       <CalendarIcon />
       Export Calendar

@@ -726,10 +726,12 @@ function GroupSchedule({ code }: { code: string }) {
                 : "Tick at least two people back on — one person alone has nothing to overlap with."}
           </p>
         )}
+        </>
+        )}
       </aside>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col gap-6">
+      <div className="@container flex min-w-0 flex-1 flex-col gap-6">
       {!weekInTerm(thisMonday) && (
         <p className="text-xs text-neutral-500">
           Today falls outside {fromTermCode(state.group.term)}, so this starts at
@@ -740,9 +742,18 @@ function GroupSchedule({ code }: { code: string }) {
       {/* Three tracks so the date sits dead centre no matter what flanks it:
           the "This week" button comes and goes, and the toggle is wider than
           it, so putting either beside the arrows would drag the date off
-          centre. Below sm there is one wrapped, centred row instead. */}
-      <div className="flex flex-wrap items-center justify-center gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
-        <div className="flex items-center gap-2 sm:justify-self-start">
+          centre. Otherwise there is one wrapped, centred row.
+
+          A container query, not a media query: what decides whether the three
+          tracks fit is the width of this column, and that stopped tracking the
+          viewport the day the member list started sitting beside it. The
+          threshold is what the layout actually costs — the outer tracks are
+          `1fr` each, so the empty left one is forced to mirror the right one,
+          and the row needs twice the controls plus the date. Under that it
+          squeezed instead, clipping "Detailed" and wrapping "Export Calendar"
+          onto two lines. */}
+      <div className="flex flex-wrap items-center justify-center gap-2 @min-[68rem]:grid @min-[68rem]:grid-cols-[1fr_auto_1fr]">
+        <div className="flex items-center gap-2 @min-[68rem]:justify-self-start">
           {week !== thisMonday && weekInTerm(thisMonday) && (
             <button
               onClick={() => setWeek(thisMonday)}
@@ -775,10 +786,10 @@ function GroupSchedule({ code }: { code: string }) {
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap sm:justify-self-end">
+        <div className="flex flex-wrap items-center justify-center gap-2 @min-[68rem]:flex-nowrap @min-[68rem]:justify-self-end">
           {/* Two readings of the same week, and picking one here pins it —
               otherwise `grid` above decides from how many schedules are in. */}
-          <div className="flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
+          <div className="flex shrink-0 overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
             {(["heat", "detailed"] as const).map((mode) => (
               <button
                 key={mode}
