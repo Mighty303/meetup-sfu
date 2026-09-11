@@ -301,12 +301,6 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
         </div>
       )}
 
-      {/* Labs and tutorials are separate class numbers with no link back to the
-          lecture in the API's data, so they have to be added on their own. */}
-      <p className="text-xs text-neutral-500">
-        Tutorials and labs are listed as their own sections — add each one you&apos;re in.
-      </p>
-
       {error && <p className="text-xs text-amber-600">{error}</p>}
     </div>
   );
