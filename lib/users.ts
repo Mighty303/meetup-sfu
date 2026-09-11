@@ -72,3 +72,68 @@ export async function setAvatar(id: number, avatar: string | null): Promise<void
     WHERE id = ${id}
   `;
 }
+
+/**
+ * The password half of sign-in. Separate from upsertUser because the two doors
+ * are deliberately separate rows — see 007_password_auth.sql for why an
+ * unverified address is never allowed to meet a Google one.
+ */
+
+/** Trimmed and lowercased, which is how the partial unique index sees it. */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/**
+ * Deliberately loose. Anything stricter rejects addresses that are perfectly
+ * valid, and since nothing is mailed to this it is a label on the account
+ * rather than a channel — the shape only has to rule out obvious typos.
+ */
+export function isEmailShaped(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+
+export interface PasswordUser extends AppUser {
+  passwordHash: string | null;
+}
+
+/** Password accounts only — a Google row with the same address is not this one. */
+export async function getPasswordUserByEmail(email: string): Promise<PasswordUser | null> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT id, email, name, image, avatar, password_hash
+    FROM meetup.users
+    WHERE LOWER(email) = ${normalizeEmail(email)} AND password_hash IS NOT NULL
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id as number,
+    email: row.email as string,
+    name: (row.name as string | null) ?? null,
+    image: (row.image as string | null) ?? null,
+    avatar: (row.avatar as string | null) ?? null,
+    passwordHash: (row.password_hash as string | null) ?? null,
+  };
+}
+
+/**
+ * Null when the address is already a password account, so the caller can say so
+ * without a second round trip. ON CONFLICT rather than a check-then-insert,
+ * because two people registering the same address at once is exactly the race a
+ * check-then-insert loses — the partial unique index is what actually decides.
+ */
+export async function createPasswordUser(input: {
+  email: string;
+  name: string | null;
+  passwordHash: string;
+}): Promise<AppUser | null> {
+  const sql = getDb();
+  const rows = await sql`
+    INSERT INTO meetup.users (email, name, password_hash)
+    VALUES (${normalizeEmail(input.email)}, ${input.name}, ${input.passwordHash})
+    ON CONFLICT (LOWER(email)) WHERE password_hash IS NOT NULL DO NOTHING
+    RETURNING id, email, name, image, avatar
+  `;
+  return (rows[0] as AppUser) ?? null;
+}
