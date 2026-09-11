@@ -120,6 +120,10 @@ function GroupSchedule({ code }: { code: string }) {
   const gridParam = searchParams.get("grid");
   const pinnedGrid = gridParam === "detailed" || gridParam === "heat" ? gridParam : null;
   const [saving, setSaving] = useState(false);
+  // Furniture, not a reading of the data — so it stays in component state
+  // rather than in the URL the way `grid` does. A shared link shouldn't decide
+  // whether the person opening it sees the member list.
+  const [listOpen, setListOpen] = useState(true);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   // The section under the cursor in the picker, sketched onto the grid.
   const [preview, setPreview] = useState<{ course: string; section: SectionHit } | null>(null);
@@ -623,27 +627,52 @@ function GroupSchedule({ code }: { code: string }) {
           Below `lg` there is no room for a second column, so they stack in the
           old order and the list keeps its own multi-column layout. */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      {/* The handle on its right edge folds it away sideways, which is the
+          point on a laptop: the detailed grid truncates course codes to make
+          room for this column, and collapsed it hands all of that back. The
+          arrow stays put across both states — it is the edge of the list, so
+          it is where you reach for the list whether it is open or not. */}
       {view === "everyone" && (
-      <aside className="flex flex-col gap-2 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-56 lg:shrink-0 xl:w-64">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="font-medium">Group List</h2>
-          <p className="text-xs text-neutral-500">
-            Click a name to toggle them out
-          </p>
-          {shown.length < scheduled.length && (
-            <button
-              onClick={() => setHidden(new Set())}
-              className="ml-auto text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-            >
-              Include everyone
-            </button>
+      <aside
+        className={`flex flex-col gap-2 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:shrink-0 ${
+          listOpen ? "lg:w-56 xl:w-64" : "lg:w-auto"
+        }`}
+      >
+        {/* justify-end plus mr-auto on the headings, rather than absolute
+            positioning: collapsed there is nothing else in this row, and the
+            arrow still lands on the right edge without the aside needing a
+            height of its own. */}
+        <div className="flex items-start justify-end gap-x-3">
+          {listOpen && (
+            <div className="mr-auto flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 className="font-medium">Group List</h2>
+              <p className="text-xs text-neutral-500">
+                Click a name to toggle them out
+              </p>
+              {shown.length < scheduled.length && (
+                <button
+                  onClick={() => setHidden(new Set())}
+                  className="text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                >
+                  Include everyone
+                </button>
+              )}
+            </div>
           )}
+          {/* The heading stays when it's folded away, so the rail says what
+              it is rather than leaving a bare arrow to be guessed at. It costs
+              some of the width the collapse was buying back, which is the
+              right trade — an unlabelled control nobody presses saves nothing. */}
+          {!listOpen && <span className="mr-auto font-medium whitespace-nowrap">Group List</span>}
+          <CollapseHandle open={listOpen} onToggle={() => setListOpen((v) => !v)} />
         </div>
+        {listOpen && (
+        <>
         {/* The scroll lives on the list alone, so a long group scrolls under a
             heading and a note that stay put. `min-h-0` because a flex child
             defaults to its content's height and would push the column past the
             viewport instead of scrolling inside it. */}
-        <ul className="grid gap-1.5 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-1 lg:overflow-y-auto xl:grid-cols-1">
+        <ul id="group-list" className="grid gap-1.5 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-1 lg:overflow-y-auto xl:grid-cols-1">
           {state.members.map((m) => {
             const hasSchedule = scheduled.some((s) => s.id === m.id);
             const on = hasSchedule && !hidden.has(m.id);
@@ -934,6 +963,42 @@ function PencilIcon() {
       <path d="M13.75 3.25l3 3-9.5 9.5-3.75.75.75-3.75 9.5-9.5z" />
       <path d="M12.25 4.75l3 3" />
     </svg>
+  );
+}
+
+/**
+ * The member list's collapse handle, on its right edge.
+ *
+ * Points the way the list will move: left to fold it away, right to bring it
+ * back. The arrow never moves between the two states, so it stays the thing
+ * you reach for either way.
+ */
+function CollapseHandle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const label = open ? "Collapse group list" : "Expand group list";
+  return (
+    <button
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls="group-list"
+      aria-label={label}
+      title={label}
+      className="-mr-1 shrink-0 rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        className={`transition-transform ${open ? "rotate-180" : ""}`}
+      >
+        <path d="M4 2l4 4-4 4" />
+      </svg>
+    </button>
   );
 }
 
