@@ -1,8 +1,8 @@
 // The bridge between this app's model of a week and an iCalendar file.
 //
-// lib/ical.ts knows RFC 5545 and nothing else; this knows about sections, terms
-// and free windows and nothing about line folding. Everything here is pure —
-// the routes fetch the term dump and hand it in.
+// lib/ical.ts knows RFC 5545 and nothing else; this knows about sections and
+// terms and nothing about line folding. Everything here is pure — the route
+// fetches the term dump and hands it in.
 
 import {
   DAYS,
@@ -13,7 +13,6 @@ import {
   parseDays,
   toMinutes,
 } from "./sfu";
-import type { FreeWindow } from "./overlap";
 import {
   ICS_DAYS,
   VANCOUVER_TZID,
@@ -168,60 +167,6 @@ export function timetableCalendar({
 
   return buildCalendar(events, {
     name: `${groupName} — my timetable (${fromTermCode(term)})`,
-    stamp,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Export: the group's free windows
-// ---------------------------------------------------------------------------
-
-export interface WindowsCalendarOptions {
-  windows: FreeWindow[];
-  /** Monday of the week the windows were computed for, as YYYY-MM-DD. */
-  weekStart: string;
-  groupName: string;
-  term: string;
-  stamp?: Date;
-}
-
-/**
- * The week's free windows as events you can drop into a calendar.
- *
- * These do not recur, and that's deliberate. The app recomputes overlap for one
- * week at a time — a window only holds while everyone's sections run, and those
- * date ranges end at different times. Repeating them to the end of term would
- * assert something nobody calculated.
- */
-export function windowsCalendar({
-  windows,
-  weekStart,
-  groupName,
-  term,
-  stamp = new Date(),
-}: WindowsCalendarOptions): string {
-  const events: OutgoingEvent[] = windows.map((w, i) => {
-    const date = addDays(weekStart, DAYS.indexOf(w.day));
-    const where = w.sharedCampus ? w.campuses[0] : w.campuses.join(" / ");
-    return {
-      uid: `free-${weekStart}-${w.day}-${w.start}-${i}@meetup-sfu`,
-      summary: w.betweenClasses
-        ? `Free — ${groupName} (between classes)`
-        : `Free — ${groupName}`,
-      description: [
-        w.onCampus.length > 0
-          ? `On campus already: ${w.onCampus.join(", ")}`
-          : "Nobody has class this day — someone has to travel",
-        "Computed by meetup-sfu for this week only.",
-      ].join("\n"),
-      location: where || undefined,
-      start: partsOf(date, w.start),
-      end: partsOf(date, w.end),
-    };
-  });
-
-  return buildCalendar(events, {
-    name: `${groupName} — free windows (${fromTermCode(term)})`,
     stamp,
   });
 }
