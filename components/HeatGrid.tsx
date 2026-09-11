@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { HoverCard, type HoverCardData } from "@/components/HoverCard";
-import { NowLine, useNowMarker } from "@/components/NowLine";
+import { useMemo } from "react";
+import { HoverCard, useHoverCard } from "@/components/HoverCard";
+import { NowLine, useNowMarker, useTodayColumn } from "@/components/NowLine";
 import type { Member } from "@/components/WeekGrid";
-import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
+import { COLUMN_HEIGHT, DAY_CELL, DAY_TRACK, GRID_SCROLLER, LEGEND_HEIGHT } from "@/lib/grid-layout";
 import { availabilityBands, type BusyBlock } from "@/lib/overlap";
 import { formatTime, WEEKDAYS, type DayKey } from "@/lib/sfu";
 
@@ -76,8 +76,9 @@ export function HeatGrid({
   weekStart,
   columnHeight = COLUMN_HEIGHT,
 }: Props) {
-  const [hover, setHover] = useState<HoverCardData | null>(null);
+  const [hover, setHover] = useHoverCard();
   const now = useNowMarker(weekStart, dayStart, dayEnd);
+  const { trackRef, todayIndex } = useTodayColumn(weekStart);
 
   // Only people with a schedule constrain anything; someone with nothing saved
   // would read as free all week and wash the whole grid green.
@@ -120,9 +121,8 @@ export function HeatGrid({
   }
 
   return (
-    // On narrow screens the week scrolls sideways instead of turning into slivers.
-    <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <div className="flex min-w-[620px] flex-col gap-2">
+    <div className={GRID_SCROLLER}>
+      <div className="flex flex-col gap-2">
         {/* Legend. The ramp is sampled at the real group size, so the swatches
             are the exact shades on the grid rather than a generic gradient.
             Fixed height, and matched by the detailed grid's own legend, so
@@ -175,11 +175,20 @@ export function HeatGrid({
             </div>
           </div>
 
-          <div className="grid flex-1 grid-cols-5 gap-2">
-            {WEEKDAYS.map((day) => (
-              <div key={day}>
-                <div className="mb-1 text-center font-medium text-neutral-600 dark:text-neutral-300">
+          <div ref={trackRef} className={DAY_TRACK}>
+            {WEEKDAYS.map((day, dayIndex) => (
+              <div key={day} className={DAY_CELL}>
+                <div
+                  className={`mb-1 text-center font-medium ${
+                    dayIndex === todayIndex
+                      ? "text-neutral-900 dark:text-neutral-100"
+                      : "text-neutral-600 dark:text-neutral-300"
+                  }`}
+                >
                   {LABELS[day]}
+                  {/* On a phone only one day is on screen, so the header is the
+                      only thing saying which. */}
+                  {dayIndex === todayIndex && <span className="ml-1 text-red-500">•</span>}
                 </div>
                 <div
                   className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 ${columnHeight}`}

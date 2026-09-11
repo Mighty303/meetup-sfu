@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { HoverCard, type HoverCardData } from "@/components/HoverCard";
-import { NowLine, useNowMarker } from "@/components/NowLine";
-import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
+import { HoverCard, useHoverCard } from "@/components/HoverCard";
+import { NowLine, useNowMarker, useTodayColumn } from "@/components/NowLine";
+import { COLUMN_HEIGHT, DAY_CELL, DAY_TRACK, GRID_SCROLLER, LEGEND_HEIGHT } from "@/lib/grid-layout";
 import type { BusyBlock, FreeWindow } from "@/lib/overlap";
 import { formatTime, WEEKDAYS, type DayKey } from "@/lib/sfu";
 
@@ -216,8 +215,9 @@ export function WeekGrid({
   // Tracked in state rather than a CSS-only tooltip: the day columns clip their
   // overflow, so an in-flow tooltip would be cut off at the column edge. A
   // fixed-position card follows the cursor and escapes the clipping entirely.
-  const [hover, setHover] = useState<HoverCardData | null>(null);
+  const [hover, setHover] = useHoverCard();
   const now = useNowMarker(weekStart, dayStart, dayEnd);
+  const { trackRef, todayIndex } = useTodayColumn(weekStart);
 
   const span = dayEnd - dayStart;
   const pct = (mins: number) => ((mins - dayStart) / span) * 100;
@@ -245,11 +245,6 @@ export function WeekGrid({
     ...[...placedByDay.values()].map((ps) => Math.max(1, ...ps.map((p) => p.columns)))
   );
 
-  // A column narrower than ~46px truncates "CMPT 307" mid-word, so the grid
-  // grows with the worst clash and scrolls sideways rather than shrinking
-  // past the point of being readable.
-  const minGridWidth = 56 + 5 * Math.max(124, maxColumns * 62);
-
   // Past three columns a course code no longer fits at the roomier size, so the
   // type and padding tighten rather than letting "CMPT 307" clip mid-word.
   const tight = maxColumns >= 4;
@@ -258,13 +253,11 @@ export function WeekGrid({
   for (let m = Math.ceil(dayStart / 60) * 60; m <= dayEnd; m += 60) hours.push(m);
 
   return (
-    // On narrow screens the week scrolls sideways instead of turning into slivers.
-    <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <div className={GRID_SCROLLER}>
       {/* Fixed height, and matched by the heatmap's own legend, so switching
           between the two views doesn't move the page under you. */}
       <div
         className={`mb-2 flex flex-col items-center justify-center gap-1 text-xs ${LEGEND_HEIGHT}`}
-        style={{ minWidth: minGridWidth }}
       >
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
           {[
@@ -283,7 +276,7 @@ export function WeekGrid({
         </span>
       </div>
 
-      <div className="flex gap-2 text-xs" style={{ minWidth: minGridWidth }}>
+      <div className="flex gap-2 text-xs">
         {/* Hour gutter. The empty header mirrors the day-name row so the hour
             labels line up with the grid lines instead of sitting a row high. */}
         <div className="w-12 shrink-0">
@@ -301,13 +294,23 @@ export function WeekGrid({
           </div>
         </div>
 
-        <div className="grid flex-1 grid-cols-5 gap-2">
-          {WEEKDAYS.map((day) => {
+        <div ref={trackRef} className={DAY_TRACK}>
+          {WEEKDAYS.map((day, i) => {
             const dayFree = free.filter((w) => w.day === day);
+            const isToday = i === todayIndex;
             return (
-              <div key={day}>
-                <div className="mb-1 text-center font-medium text-neutral-600 dark:text-neutral-300">
+              <div key={day} className={DAY_CELL}>
+                <div
+                  className={`mb-1 text-center font-medium ${
+                    isToday
+                      ? "text-neutral-900 dark:text-neutral-100"
+                      : "text-neutral-600 dark:text-neutral-300"
+                  }`}
+                >
                   {LABELS[day]}
+                  {/* On a phone only one day is on screen, so the header is the
+                      only thing saying which. */}
+                  {isToday && <span className="ml-1 text-red-500">•</span>}
                 </div>
                 <div
                   className={`relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 ${columnHeight}`}

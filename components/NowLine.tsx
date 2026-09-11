@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WEEKDAYS, formatTime, type DayKey } from "@/lib/sfu";
 
 /** Midday, so the date can't slide across a daylight-saving boundary. */
@@ -65,6 +65,60 @@ export function useNowMarker(
   }, [weekStart, dayStart, dayEnd]);
 
   return now && now.weekStart === weekStart ? now : null;
+}
+
+/** Which of the five drawn days is today, or null if the week isn't this one. */
+function todayIndexIn(weekStart: string): number | null {
+  const offset = Math.round(
+    (parseISODate(toISODate(new Date())).getTime() - parseISODate(weekStart).getTime()) / 86_400_000
+  );
+  return offset >= 0 && offset < WEEKDAYS.length ? offset : null;
+}
+
+/**
+ * Today's place in the week, for the two things that need it outside the "now"
+ * line itself: marking the day header, and opening the mobile day track on
+ * today rather than on Monday.
+ *
+ * Unlike `useNowMarker` this doesn't care what time it is — a day is still
+ * today at 2am, when there's no row on the grid to point at.
+ *
+ * Returns the track ref to hang on whichever element scrolls. On desktop the
+ * five days are laid out side by side with nothing to scroll, and the effect
+ * notices that and leaves it alone.
+ */
+export function useTodayColumn(weekStart: string | undefined) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  // Null until after mount, like the "now" line and for the same reason: the
+  // grids render on the server, where "today" is a different machine's clock.
+  const [todayIndex, setTodayIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    const resolve = () => setTodayIndex(weekStart ? todayIndexIn(weekStart) : null);
+    resolve();
+    // A tab left open overnight should move the marker, not keep yesterday's.
+    const id = setInterval(resolve, 60_000);
+    return () => clearInterval(id);
+  }, [weekStart]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    // Nothing overflows, so there is nothing to scroll and no day to choose.
+    if (track.scrollWidth <= track.clientWidth) return;
+
+    // Monday when the week on screen isn't this one — paging away should land
+    // at the start of that week rather than keeping the offset you had.
+    const cells = track.children;
+    const target = cells[todayIndex ?? 0] as HTMLElement | undefined;
+    const first = cells[0] as HTMLElement | undefined;
+    if (!target || !first) return;
+    // Measured against the first cell rather than read off offsetLeft alone,
+    // which is relative to whichever ancestor happens to be positioned.
+    track.scrollLeft = target.offsetLeft - first.offsetLeft;
+  }, [todayIndex, weekStart]);
+
+  return { trackRef, todayIndex };
 }
 
 /**

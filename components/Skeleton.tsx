@@ -4,7 +4,7 @@
  * signed-out button placeholder in AuthButton.
  */
 
-import { COLUMN_HEIGHT, LEGEND_HEIGHT } from "@/lib/grid-layout";
+import { COLUMN_HEIGHT, DAY_CELL, DAY_TRACK, GRID_SCROLLER, LEGEND_HEIGHT } from "@/lib/grid-layout";
 
 /** One grey bar. Sizing comes from the caller — this only carries the tone. */
 export function Bar({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
@@ -30,7 +30,7 @@ const BLOCKS: [number, number][][] = [
 
 function WeekGridSkeleton() {
   return (
-    <div className="-mx-4 animate-pulse overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-hidden>
+    <div className={`animate-pulse ${GRID_SCROLLER}`} aria-hidden>
       {/* Stands in for whichever legend is about to load, so the real grid
           lands where the placeholder was instead of 52px lower. */}
       <div className={`mb-2 flex flex-col items-center justify-center gap-1 ${LEGEND_HEIGHT}`}>
@@ -50,9 +50,9 @@ function WeekGridSkeleton() {
           </div>
         </div>
 
-        <div className="grid flex-1 grid-cols-5 gap-2">
+        <div className={DAY_TRACK}>
           {BLOCKS.map((blocks, day) => (
-            <div key={day}>
+            <div key={day} className={DAY_CELL}>
               <div className="mb-1 flex justify-center">
                 <Bar className="h-3 w-8" />
               </div>
