@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { DemoAvailability } from "@/components/DemoAvailability";
 import { GroupForms } from "@/components/GroupForms";
 
@@ -36,7 +37,39 @@ export function LandingHome() {
         <DemoAvailability />
       </section>
 
-      <GroupForms startDelay={240} />
+      {/* The pitch for an account, not the form for one. A sign-up form sitting
+          in the middle of the page put three fields and a provider choice in
+          front of someone still deciding whether they wanted any of this; the
+          decision is the button, and /signup is where the typing happens. */}
+      <section
+        id="get-started"
+        className="fade-up mx-auto w-full max-w-lg scroll-mt-6 rounded-xl border border-neutral-200 p-6 dark:border-neutral-800"
+        style={{ animationDelay: "240ms" }}
+      >
+        <h2 className="text-lg font-semibold tracking-tight">Get started</h2>
+        <p className="mt-1 mb-5 text-sm text-neutral-600 dark:text-neutral-400">
+          You need an account to add your own schedule. Sign in with Google, or
+          with an email and password that never touches Google.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/signup"
+            className="flex-1 rounded-lg bg-neutral-900 px-4 py-2.5 text-center font-medium text-white transition-opacity hover:opacity-90 dark:bg-white dark:text-neutral-900"
+          >
+            Create an account
+          </Link>
+          <Link
+            href="/signin"
+            className="flex-1 rounded-lg border border-neutral-300 px-4 py-2.5 text-center font-medium transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            Sign in
+          </Link>
+        </div>
+      </section>
+
+      {/* Below the account section, because creating a group signed out leaves
+          it without an admin — it works, and it is not the path to recommend. */}
+      <GroupForms startDelay={360} />
     </main>
   );
 }

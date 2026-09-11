@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
@@ -244,16 +244,12 @@ export default function ProfilePage() {
       <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-4 p-6">
         <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Sign in with Google to edit your name and schedule in the groups you&apos;re in.
+          Sign in to edit your name and schedule in the groups you&apos;re in.
         </p>
-        <div>
-          <button
-            onClick={() => signIn("google")}
-            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
-          >
-            Sign in
-          </button>
-        </div>
+        {/* `next` so signing in lands back here rather than on the home page. */}
+        <Link href="/signin?next=%2Fprofile" className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 dark:bg-white dark:text-neutral-900">
+          Sign in
+        </Link>
         <Suspense fallback={null}>
           <BackLink fallbackCode={null} />
         </Suspense>
@@ -315,12 +311,15 @@ export default function ProfilePage() {
                 )}
               </div>
               {avatarError && <p className="mt-1 text-xs text-amber-600">{avatarError}</p>}
-              {/* The name still comes from Google on every sign-in, so editing
-                  it here would be undone the next time you signed in. */}
+              {/* A Google name is refreshed from the profile on every sign-in,
+                  so editing it here would be undone the next time you signed
+                  in. A password account's is whatever it was registered with,
+                  and has no edit control yet — either way the per-group names
+                  are the ones to change, so the copy doesn't split hairs. */}
               <p className="mt-2 text-xs text-neutral-500">
                 Your picture is cropped square and shrunk to 128px before it&apos;s
-                saved. Your name comes from Google — the per-group names below are
-                the ones you can change.
+                saved. The name above is the one on your account — the per-group
+                names below are the ones you can change.
               </p>
             </div>
           </section>

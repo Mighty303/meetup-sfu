@@ -71,25 +71,36 @@ function NavBarContent() {
           <Logo />
         </Link>
 
-        <div className="hidden items-center gap-x-1 sm:flex">{links}</div>
+        {signedIn && <div className="hidden items-center gap-x-1 sm:flex">{links}</div>}
 
-        <div className="ml-auto hidden sm:block">
+        {/* Signed in, the account block is desktop-only — the mobile menu
+            carries Sign out, and both at once is a cramped bar and a repeated
+            control. Signed out it is the whole point of the bar, so it shows
+            at every width and the menu below never opens. */}
+        <div className={`ml-auto flex items-center gap-2 ${signedIn ? "hidden sm:flex" : ""}`}>
           <AuthButton />
         </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls="nav-menu"
-          aria-label={open ? "Close menu" : "Open menu"}
-          className="ml-auto rounded-lg p-2 text-neutral-600 transition-colors hover:bg-neutral-100 sm:hidden dark:text-neutral-300 dark:hover:bg-neutral-800"
-        >
-          {open ? <CloseIcon /> : <MenuIcon />}
-        </button>
+        {/* Only signed in. Signed out the bar holds two buttons and the mark,
+            which fit any phone — folding them behind a hamburger would put a
+            tap between someone and the one thing the page is asking them to
+            do. While the session is still resolving there is nothing to fold
+            either, and guessing wrong means the button flickers. */}
+        {signedIn && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls="nav-menu"
+            aria-label={open ? "Close menu" : "Open menu"}
+            className="-mr-1 ml-auto rounded-lg p-2 text-neutral-600 sm:ml-1 transition-colors hover:bg-neutral-100 sm:hidden dark:text-neutral-300 dark:hover:bg-neutral-800"
+          >
+            {open ? <CloseIcon /> : <MenuIcon />}
+          </button>
+        )}
       </div>
 
-      {open && (
+      {open && signedIn && (
         <div
           id="nav-menu"
           // Navigating is the whole point of the menu, so a click on any link

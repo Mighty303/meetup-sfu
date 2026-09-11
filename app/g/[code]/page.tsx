@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -325,12 +325,14 @@ function GroupSchedule({ code }: { code: string }) {
       <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-6">
         <h1 className="text-2xl font-semibold tracking-tight">Schedule</h1>
         <p className="text-sm text-neutral-500">Sign in to see your saved schedule.</p>
-        <button
-          onClick={() => signIn("google")}
-          className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
+        {/* `next` so signing in lands back on this group's week rather than on
+            the home page, which is the whole reason the param exists. */}
+        <Link
+          href={`/signin?next=${encodeURIComponent(`/g/${code}?view=mine`)}`}
+          className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 dark:bg-white dark:text-neutral-900"
         >
           Sign in
-        </button>
+        </Link>
         <Link href={`/g/${code}`} className="text-sm text-blue-600 hover:underline dark:text-blue-400">View group schedule</Link>
       </main>
     );
@@ -492,8 +494,7 @@ function GroupSchedule({ code }: { code: string }) {
       {!signedIn ? (
         <div className="rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
           <p className="text-neutral-600 dark:text-neutral-300">
-            Sign in with Google to add your schedule — you can view the group
-            without it.
+            Sign in to add your schedule — you can view the group without it.
           </p>
         </div>
       ) : !me ? (
