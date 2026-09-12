@@ -11,6 +11,7 @@ import { CoursePicker } from "@/components/CoursePicker";
 import { HeatGrid } from "@/components/HeatGrid";
 import { GroupPageSkeleton } from "@/components/Skeleton";
 import { WeekGrid } from "@/components/WeekGrid";
+import { courseColors } from "@/lib/course-color";
 import { blocksFromSection, commonFree } from "@/lib/overlap";
 import type { BusyBlock, FreeWindow, UnscheduledSection } from "@/lib/overlap";
 import { fromTermCode } from "@/lib/sfu";
@@ -323,6 +324,39 @@ function GroupSchedule({ code }: { code: string }) {
     [schedules, view]
   );
 
+  /**
+   * A colour per course of your own, for `view=mine`.
+   *
+   * Built from both halves of your schedule — the blocks on the grid and the
+   * async sections that have none — because the chips beside the search box
+   * are the key to these colours and list both. Deriving it from one of the
+   * two would shift every colour between the grid and its own legend.
+   */
+  const myCourseColors = useMemo(() => {
+    if (!me) return undefined;
+    const timetabled = (state?.busyByMember[me.id] ?? [])
+      .filter((b) => b.classNumber !== undefined)
+      .map((b) => b.course);
+    const async_ = (state?.unscheduled[me.id] ?? []).map((sec) => sec.course);
+    return courseColors([...timetabled, ...async_]);
+  }, [me, state]);
+
+  /**
+   * The swatch beside each saved course, which is always whatever the grid
+   * below is actually drawing.
+   *
+   * On your own week that's one colour per course. In a group the grid draws
+   * every block of yours in your one member colour, so the chips say the same
+   * thing — the same swatch on all of them. Not redundant: it's the legend for
+   * "these five are the red blocks", which is the question the group grid
+   * makes you ask.
+   */
+  const myChipColors = useMemo(() => {
+    if (!myCourseColors || !me) return undefined;
+    if (view === "mine") return myCourseColors;
+    return Object.fromEntries(Object.keys(myCourseColors).map((code) => [code, me.color]));
+  }, [myCourseColors, me, view]);
+
   const previewBlocks = useMemo(
     () => (preview ? blocksFromSection(preview.course, preview.section) : []),
     [preview]
@@ -570,6 +604,7 @@ function GroupSchedule({ code }: { code: string }) {
             groupCode={code}
             memberId={me.id}
             classNumbers={me.classNumbers}
+            courseColors={myChipColors}
             onChange={load}
             onPreview={setPreview}
           />
@@ -883,6 +918,9 @@ function GroupSchedule({ code }: { code: string }) {
           dayEnd={DAY_END}
           solo={view === "mine"}
           weekStart={week ?? undefined}
+          // Only on your own week: in a group the colour has to stay the
+          // person, which is what you scan a column for.
+          courseColors={view === "mine" ? myCourseColors : undefined}
           preview={previewBlocks}
           previewColor={me?.color}
         />

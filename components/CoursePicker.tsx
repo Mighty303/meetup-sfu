@@ -15,6 +15,13 @@ interface Props {
   memberId: number;
   /** Class numbers already saved, so the picker can mark and unmark them. */
   classNumbers: string[];
+  /**
+   * Course code -> the colour that course is drawn in on the grid. Whatever
+   * that is — one per course on your own week, your single member colour in a
+   * group — the chip carries the same swatch, which is what makes this list
+   * the key to the grid rather than just a list.
+   */
+  courseColors?: Record<string, string>;
   /** Called after every add or remove so the page can refresh the grid. */
   onChange: () => void;
   /**
@@ -48,7 +55,7 @@ function meetingLabel(s: SectionHit): string {
     .join("  |  ");
 }
 
-export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange, onPreview }: Props) {
+export function CoursePicker({ term, groupCode, memberId, classNumbers, courseColors, onChange, onPreview }: Props) {
   const [query, setQuery] = useState("");
   // Tagged with the query they answer, so a result set never outlives its box.
   const [hits, setHits] = useState<{ q: string; courses: CourseHit[] }>({ q: "", courses: [] });
@@ -193,8 +200,15 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
                       Only the × removes now. */}
                   <span
                     title={`${courseCode(c)} ${s.section} — ${meetingLabel(s)}`}
-                    className="flex items-center gap-2 rounded-lg border border-neutral-300 py-1.5 pl-3 pr-1.5 text-sm dark:border-neutral-700"
+                    className="flex items-center gap-2 rounded-lg border border-neutral-300 py-1.5 pl-2.5 pr-1.5 text-sm dark:border-neutral-700"
                   >
+                    {courseColors?.[courseCode(c)] && (
+                      <span
+                        aria-hidden
+                        className="h-3 w-3 shrink-0 rounded-sm"
+                        style={{ backgroundColor: courseColors[courseCode(c)] }}
+                      />
+                    )}
                     <span className="font-medium">{courseCode(c)}</span>
                     <span className="text-neutral-500">{s.section}</span>
                     <button

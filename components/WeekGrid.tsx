@@ -193,6 +193,13 @@ interface Props {
   solo?: boolean;
   /** Monday of the week on screen, as YYYY-MM-DD — places the "now" line. */
   weekStart?: string;
+  /**
+   * Course code -> colour. Given on a single person's week, where every block
+   * would otherwise be the one member colour and the courses were impossible
+   * to tell apart at a glance. Absent on a group's week, where the colour has
+   * to keep meaning "whose block this is".
+   */
+  courseColors?: Record<string, string>;
   /** A section being considered, drawn over the week but not part of it. */
   preview?: BusyBlock[];
   /** Whose it would be — the preview borrows their colour. */
@@ -214,6 +221,7 @@ export function WeekGrid({
   dayEnd,
   solo = false,
   weekStart,
+  courseColors,
   preview = [],
   previewColor = "#737373",
   columnHeight = COLUMN_HEIGHT,
@@ -423,6 +431,7 @@ export function WeekGrid({
                     const unit = 100 / columns;
                     const width = unit * span;
                     const shared = who.length > 1;
+                    const fill = courseColors?.[b.course] ?? who[0].color;
                     return (
                       <div
                         key={`${who[0].id}-${bi}`}
@@ -434,19 +443,19 @@ export function WeekGrid({
                           height: `calc(${heightPct(minutes)}% - ${GAP_Y}px)`,
                           left: `calc(${column * unit}% + ${GAP_X / 2}px)`,
                           width: `calc(${width}% - ${GAP_X}px)`,
-                          backgroundColor: shared ? undefined : who[0].color,
+                          backgroundColor: shared ? undefined : fill,
                         }}
                         onMouseEnter={(e) =>
                           setHover({
                             title: b.course,
                             subtitle: b.detail || undefined,
                             lines: [
-                              who.map((m) => m.displayName).join(", "),
+                              ...(solo ? [] : [who.map((m) => m.displayName).join(", ")]),
                               `${formatTime(b.start)} – ${formatTime(b.end)} · ${formatDuration(minutes)}`,
                               b.campus ?? "No campus listed",
                               ...(shared ? ["Same section — you're already together"] : []),
                             ],
-                            accent: who[0].color,
+                            accent: fill,
                             x: e.clientX,
                             y: e.clientY,
                           })
@@ -471,13 +480,17 @@ export function WeekGrid({
                         </span>
                         {/* Whose block it is matters more than the section
                             code, so the names get the second line and the
-                            section only appears when there's room for it. */}
-                        {minutes >= 50 && (
+                            section only appears when there's room for it.
+                            On one person's week there is no name worth
+                            printing — it could only be them, and the colour
+                            says which course it is — so the section moves up
+                            into the line the name was using. */}
+                        {!solo && minutes >= 50 && (
                           <span className={`truncate font-medium text-white/95 ${tight ? "text-[9px]" : "text-[10px]"}`}>
                             {nameList(who.map((m) => m.displayName), shared ? 2 : 1)}
                           </span>
                         )}
-                        {minutes >= 80 && b.detail && (
+                        {b.detail && minutes >= (solo ? 50 : 80) && (
                           <span className={`truncate text-white/80 ${tight ? "text-[9px]" : "text-[10px]"}`}>
                             {b.detail}
                           </span>
