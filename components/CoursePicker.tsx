@@ -173,88 +173,101 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-xs font-medium text-neutral-500">Your courses</p>
-      {key === "" ? (
-        <p className="text-xs text-neutral-500">Nothing saved yet — add your sections below.</p>
-      ) : saved.length === 0 ? (
-        <p className="text-xs text-neutral-500">Loading your sections…</p>
-      ) : null}
-      {key !== "" && saved.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5">
-          {saved.map((c) =>
-            c.sections.map((s) => (
-              <li key={s.classNumber}>
-                <button
-                  onClick={() => remove(s.classNumber)}
-                  disabled={busy === s.classNumber}
-                  title={`${courseCode(c)} ${s.section} — ${meetingLabel(s)}`}
-                  className="flex items-center gap-1.5 rounded-lg border border-neutral-300 px-2 py-1 text-xs transition-colors hover:border-red-400 hover:text-red-600 disabled:opacity-50 dark:border-neutral-700"
-                >
-                  <span className="font-medium">{courseCode(c)}</span>
-                  <span className="text-neutral-500">{s.section}</span>
-                  <span aria-hidden>×</span>
-                  <span className="sr-only">remove</span>
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      )}
-
-      <p className="mt-1 text-xs font-medium text-neutral-500">Search SFU courses</p>
-      {/* Typing searches. Enter adds, but only when the results leave no room
-          for doubt — a query like "cmpt 225" matches a lecture and its
-          tutorials, and there is no way to tell which of them you're in. */}
-      <div className="relative">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          aria-hidden
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
-        >
-          <circle cx="9" cy="9" r="5.5" />
-          <path d="M13.2 13.2L17 17" />
-        </svg>
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onSearchKeyDown}
-          placeholder="CMPT 225, MATH 151, calculus…"
-          // Right padding is there whether or not the button is, so the text
-          // doesn't shift under the cursor on the first and last keystroke.
-          className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-9 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-        />
-        {query !== "" && (
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              inputRef.current?.focus();
-            }}
-            aria-label="Clear search"
-            className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden
-            >
-              <path d="M5 5l10 10M15 5L5 15" />
-            </svg>
-          </button>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold tracking-tight">Your courses</h3>
+        {key === "" ? (
+          <p className="text-sm text-neutral-500">Nothing saved yet — add your sections below.</p>
+        ) : saved.length === 0 ? (
+          <p className="text-sm text-neutral-500">Loading your sections…</p>
+        ) : null}
+        {key !== "" && saved.length > 0 && (
+          <ul className="flex flex-wrap gap-2">
+            {saved.map((c) =>
+              c.sections.map((s) => (
+                <li key={s.classNumber}>
+                  {/* The chip is a label, not a button. The whole thing used to
+                      be the remove control, so reaching for a course to read
+                      its meeting times dropped it from every group you're in —
+                      an undo-less delete on the most obvious thing to click.
+                      Only the × removes now. */}
+                  <span
+                    title={`${courseCode(c)} ${s.section} — ${meetingLabel(s)}`}
+                    className="flex items-center gap-2 rounded-lg border border-neutral-300 py-1.5 pl-3 pr-1.5 text-sm dark:border-neutral-700"
+                  >
+                    <span className="font-medium">{courseCode(c)}</span>
+                    <span className="text-neutral-500">{s.section}</span>
+                    <button
+                      onClick={() => remove(s.classNumber)}
+                      disabled={busy === s.classNumber}
+                      aria-label={`Remove ${courseCode(c)} ${s.section}`}
+                      title={`Remove ${courseCode(c)} ${s.section}`}
+                      className="flex h-5 w-5 items-center justify-center rounded-md leading-none text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                    >
+                      <span aria-hidden>×</span>
+                    </button>
+                  </span>
+                </li>
+              ))
+            )}
+          </ul>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold tracking-tight">Search SFU courses</h3>
+        {/* Typing searches. Enter adds, but only when the results leave no room
+            for doubt — a query like "cmpt 225" matches a lecture and its
+            tutorials, and there is no way to tell which of them you're in. */}
+        <div className="relative">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+          >
+            <circle cx="9" cy="9" r="5.5" />
+            <path d="M13.2 13.2L17 17" />
+          </svg>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder="CMPT 225, MATH 151, calculus…"
+            // Right padding is there whether or not the button is, so the text
+            // doesn't shift under the cursor on the first and last keystroke.
+            className="w-full rounded-lg border border-neutral-300 py-2.5 pl-9 pr-9 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+          />
+          {query !== "" && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                inputRef.current?.focus();
+              }}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden
+              >
+                <path d="M5 5l10 10M15 5L5 15" />
+              </svg>
+            </button>
+          )}
       </div>
 
       {/* Only when there is one answer, so the line is never a promise the
@@ -332,6 +345,7 @@ export function CoursePicker({ term, groupCode, memberId, classNumbers, onChange
       )}
 
       {error && <p className="text-xs text-amber-600">{error}</p>}
+      </div>
     </div>
   );
 }

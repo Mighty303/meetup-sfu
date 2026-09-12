@@ -194,8 +194,9 @@ function GroupSchedule({ code }: { code: string }) {
     const params = new URLSearchParams();
     if (nextView === "mine") params.set("view", "mine");
     // The pin travels, the derived choice doesn't: carrying this group's answer
-    // into another one would pin a view the reader never picked.
-    if (pinnedGrid) params.set("grid", pinnedGrid);
+    // into another one would pin a view the reader never picked. It doesn't
+    // travel to your own schedule at all, which has only the one reading.
+    if (pinnedGrid && nextView !== "mine") params.set("grid", pinnedGrid);
     return `/g/${nextCode}${params.size > 0 ? `?${params}` : ""}`;
   }
 
@@ -291,14 +292,20 @@ function GroupSchedule({ code }: { code: string }) {
    * or two schedules in it opens on a heatmap of almost nothing, which is
    * exactly the group every new user is looking at. The labelled blocks say
    * what's actually in the way, so those come first until the third schedule
-   * lands. `view=mine` is one person by definition and always takes them.
+   * lands.
    *
-   * `?grid=` overrides either way, and `scheduled` is known before the first
-   * render — the page is gated on `state` below — so this never flips under
-   * the reader.
+   * `view=mine` isn't a choice at all: Availability shades a band by how many
+   * of you are free, and with one schedule that ramp has two steps — free and
+   * not — which the labelled blocks already say, with the course names written
+   * on them. So the toggle isn't offered there, and the pin doesn't apply
+   * either, or a link carrying `grid=heat` would land you on a two-colour
+   * heatmap with nothing on screen to leave it by.
+   *
+   * `scheduled` is known before the first render — the page is gated on
+   * `state` below — so this never flips under the reader.
    */
   const grid: "detailed" | "heat" =
-    pinnedGrid ?? (view === "mine" || scheduled.length < 3 ? "detailed" : "heat");
+    view === "mine" ? "detailed" : (pinnedGrid ?? (scheduled.length < 3 ? "detailed" : "heat"));
 
   const schedules = useMemo(
     () => shown.map((m) => ({ name: m.displayName, busy: state?.busyByMember[m.id] ?? [] })),
@@ -371,8 +378,8 @@ function GroupSchedule({ code }: { code: string }) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-8 p-5 sm:p-8">
+      <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-6">
         <div>
           {/* The name is the group's, not a member's, so it's edited here
               rather than on the profile page — and only by the admin. */}
@@ -420,7 +427,13 @@ function GroupSchedule({ code }: { code: string }) {
           </p>
           {view === "mine" && <p className="mt-1 text-sm text-neutral-500">Only your classes and free time are shown.</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full flex-col gap-2 lg:w-auto">
+          <div>
+            <h2 className="font-medium">Invite link</h2>
+            <p className="text-xs text-neutral-500">
+              Anyone with this can open the group and add their own schedule.
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             {/* Always visible: clipboard access is unreliable (it silently never
                 settles when the document isn't focused), and people want to see
@@ -471,7 +484,9 @@ function GroupSchedule({ code }: { code: string }) {
           One pill is selected at a time, and switching is a real navigation, so
           these are links — middle-click and Back both behave. */}
       {signedIn && (
-        <nav aria-label="Schedule to show" className="-mt-2 flex flex-wrap items-center gap-2">
+        <div className="-mt-2 flex flex-col gap-2">
+        <h2 className="font-medium">Your groups</h2>
+        <nav aria-label="Schedule to show" className="flex flex-wrap items-center gap-2">
           <Pill href={pillHref(code, "mine")} current={view === "mine"} title="Only your classes and free time">
             <Avatar src={me?.image ?? null} name={me?.displayName ?? "You"} color={me?.color} size={18} />
             <span className="truncate">My schedule</span>
@@ -493,6 +508,7 @@ function GroupSchedule({ code }: { code: string }) {
             </Pill>
           ))}
         </nav>
+        </div>
       )}
 
       {!signedIn ? (
@@ -544,13 +560,10 @@ function GroupSchedule({ code }: { code: string }) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+        <div className="flex flex-col gap-6 rounded-xl border border-neutral-200 p-5 sm:p-6 dark:border-neutral-800">
           {/* Name and colour are set once on the profile page — they follow you
               into every group, so there's nothing to edit here. */}
-          <div className="flex items-center gap-2 text-sm">
-            <Avatar src={me.image} name={me.displayName} color={me.color} size={24} />
-            <span className="font-medium" style={{ color: me.color }}>{me.displayName}</span>
-          </div>
+          <h2 className="font-medium">Your schedule</h2>
 
           <CoursePicker
             term={state.group.term}
@@ -645,7 +658,7 @@ function GroupSchedule({ code }: { code: string }) {
         <div className="flex items-start justify-end gap-x-3">
           {listOpen && (
             <div className="mr-auto flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className="font-medium">Group List</h2>
+              <h2 className="font-medium">Group Member List</h2>
               <p className="text-xs text-neutral-500">
                 Click a name to toggle them out
               </p>
@@ -663,7 +676,7 @@ function GroupSchedule({ code }: { code: string }) {
               it is rather than leaving a bare arrow to be guessed at. It costs
               some of the width the collapse was buying back, which is the
               right trade — an unlabelled control nobody presses saves nothing. */}
-          {!listOpen && <span className="mr-auto font-medium whitespace-nowrap">Group List</span>}
+          {!listOpen && <span className="mr-auto font-medium whitespace-nowrap">Group Member List</span>}
           <CollapseHandle open={listOpen} onToggle={() => setListOpen((v) => !v)} />
         </div>
         {listOpen && (
@@ -672,7 +685,7 @@ function GroupSchedule({ code }: { code: string }) {
             heading and a note that stay put. `min-h-0` because a flex child
             defaults to its content's height and would push the column past the
             viewport instead of scrolling inside it. */}
-        <ul id="group-list" className="grid gap-1.5 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-1 lg:overflow-y-auto xl:grid-cols-1">
+        <ul id="group-list" className="grid gap-2 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-1 lg:overflow-y-auto xl:grid-cols-1">
           {state.members.map((m) => {
             const hasSchedule = scheduled.some((s) => s.id === m.id);
             const on = hasSchedule && !hidden.has(m.id);
@@ -680,7 +693,7 @@ function GroupSchedule({ code }: { code: string }) {
             return (
               <li key={m.id}>
                 <label
-                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
                     hasSchedule
                       ? on
                         ? "border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
@@ -743,16 +756,16 @@ function GroupSchedule({ code }: { code: string }) {
             );
           })}
         </ul>
-        {/* Why the grid below isn't answering the question yet. The three
-            reasons are different problems with different fixes, and one
-            sentence covering all of them told nobody what to do next. */}
+        {/* Why the grid below isn't answering the question yet. Three
+            different problems with three different fixes, so they get three
+            lines — but a line each, in a column this narrow. */}
         {shown.length < 2 && (
           <p className="text-sm text-amber-600 lg:text-xs">
             {scheduled.length === 0
-              ? "Nobody has added a schedule yet. Add yours above, then send someone the link at the top of this page — the grid fills in as people add theirs."
+              ? "No schedules yet. Add yours, then share the link."
               : scheduled.length === 1
-                ? "Only one schedule so far, so the grid is just that one week. Share the link at the top of this page; once a second person adds their classes, it starts showing when you're both free."
-                : "Tick at least two people back on — one person alone has nothing to overlap with."}
+                ? "One schedule so far. Share the link to find overlap."
+                : "Tick two people back on to see an overlap."}
           </p>
         )}
         </>
@@ -817,23 +830,26 @@ function GroupSchedule({ code }: { code: string }) {
 
         <div className="flex flex-wrap items-center justify-center gap-2 @min-[68rem]:flex-nowrap @min-[68rem]:justify-self-end">
           {/* Two readings of the same week, and picking one here pins it —
-              otherwise `grid` above decides from how many schedules are in. */}
-          <div className="flex shrink-0 overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
-            {(["heat", "detailed"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setGrid(mode)}
-                aria-pressed={grid === mode}
-                className={`px-3 py-1.5 transition-colors ${
-                  grid === mode
-                    ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900"
-                    : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                }`}
-              >
-                {mode === "detailed" ? "Detailed" : "Availability"}
-              </button>
-            ))}
-          </div>
+              otherwise `grid` above decides from how many schedules are in.
+              Absent on your own schedule, where there is only one reading. */}
+          {view !== "mine" && (
+            <div className="flex shrink-0 overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
+              {(["heat", "detailed"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setGrid(mode)}
+                  aria-pressed={grid === mode}
+                  className={`px-3 py-1.5 transition-colors ${
+                    grid === mode
+                      ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900"
+                      : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  }`}
+                >
+                  {mode === "detailed" ? "Detailed" : "Availability"}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Same row as the view toggle: these all act on the week on screen,
               and "this week's free windows" means whichever week that is. */}
@@ -974,7 +990,7 @@ function PencilIcon() {
  * you reach for either way.
  */
 function CollapseHandle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const label = open ? "Collapse group list" : "Expand group list";
+  const label = open ? "Collapse group member list" : "Expand group member list";
   return (
     <button
       onClick={onToggle}
