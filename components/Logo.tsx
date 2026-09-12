@@ -14,7 +14,7 @@ export function Logo({ size = 28 }: { size?: number }) {
       height={size}
       viewBox="0 0 36 36"
       role="img"
-      aria-label="meetup-sfu"
+      aria-label="meet"
       className="shrink-0"
     >
       <circle cx="18" cy="18" r="17" fill="#ffdf00" />

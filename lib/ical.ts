@@ -231,7 +231,7 @@ export function buildCalendar(
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//meetup-sfu//EN",
+    "PRODID:-//meet.sfucourses.com//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeText(name)}`,

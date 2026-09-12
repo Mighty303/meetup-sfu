@@ -1,4 +1,4 @@
--- meetup-sfu v0: shared free-time finder.
+-- meet.sfucourses.com v0: shared free-time finder.
 -- Lives in its own schema so it never collides with the tutoring app's tables.
 
 CREATE SCHEMA IF NOT EXISTS meetup;

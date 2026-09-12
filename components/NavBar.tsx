@@ -65,7 +65,7 @@ function NavBarContent() {
       <div className="mx-auto flex w-full max-w-[1600px] items-center gap-x-1 p-3 sm:px-6">
         <Link
           href="/"
-          aria-label="meetup-sfu home"
+          aria-label="meet home"
           className="mr-2 transition-opacity hover:opacity-80"
         >
           <Logo />

@@ -12,7 +12,7 @@ import {
 } from "@/lib/metrics";
 import { fromTermCode } from "@/lib/sfu";
 
-export const metadata = { title: "Admin · meetup-sfu" };
+export const metadata = { title: "Admin · meet.sfucourses.com" };
 
 // The whole point is the numbers as they are right now, so no caching of any
 // kind: not the route, not the fetch, not a build-time snapshot.

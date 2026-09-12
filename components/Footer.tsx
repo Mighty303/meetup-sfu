@@ -36,7 +36,7 @@ export function Footer() {
           <FooterLink href="https://sfucourses.com">sfucourses</FooterLink>
         </p>
         <a
-          href="https://github.com/Mighty303/meetup-sfu"
+          href="https://github.com/Mighty303/meet-sfucourses"
           target="_blank"
           rel="noreferrer"
           title="Source on GitHub"

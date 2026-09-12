@@ -146,7 +146,7 @@ export function timetableCalendar({
       const detail = `${section.section} ${sched.sectionCode}`.trim();
 
       events.push({
-        uid: `${classNumber}-${i}-${anchorDay.date}@meetup-sfu`,
+        uid: `${classNumber}-${i}-${anchorDay.date}@meet.sfucourses.com`,
         summary: `${code} ${detail}`.trim(),
         description: [course.title, section.instructors[0]?.name.trim()]
           .filter(Boolean)

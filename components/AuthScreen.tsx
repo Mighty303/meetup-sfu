@@ -47,7 +47,7 @@ export function AuthScreen({
         href="/"
         className="text-sm text-neutral-500 underline-offset-2 hover:underline"
       >
-        ← Back to meetup-sfu
+        ← Back to meet.sfucourses.com
       </Link>
     </main>
   );

@@ -1,4 +1,4 @@
-# meetup-sfu
+# meet.sfucourses.com
 
 Everyone in a group drops their SFU schedule in; the grid shows when you're all
 free on campus at the same time.
@@ -44,7 +44,7 @@ redirect URIs, one per origin you use:
 
 ```
 http://localhost:3000/api/auth/callback/google
-https://meetup-sfu.vercel.app/api/auth/callback/google
+https://meet.sfucourses.com/api/auth/callback/google
 ```
 
 Then, to write the credentials to `.env.local` and all three Vercel

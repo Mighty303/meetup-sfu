@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "meetup-sfu",
+  title: "meet.sfucourses.com",
   description: "Find when your SFU friend group is free on campus at the same time.",
 };
 

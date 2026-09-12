@@ -23,7 +23,7 @@ export function LandingHome() {
           the two halves of the home page have different numbers of blocks and
           a positional rule would have to be rewritten per half. */}
       <div className="fade-up mx-auto w-full max-w-lg">
-        <h1 className="text-3xl font-semibold tracking-tight">meetup-sfu</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">meet.sfucourses.com</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400">
           Everyone drops their SFU schedule in. The grid shows when you&apos;re all free
           on campus at the same time.
